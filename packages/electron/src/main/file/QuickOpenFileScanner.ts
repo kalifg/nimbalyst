@@ -1,13 +1,9 @@
-import { execFile } from 'child_process';
 import { existsSync } from 'fs';
 import * as path from 'path';
 import { basename, dirname } from 'path';
-import { promisify } from 'util';
-import { getRipgrepPath } from '../services/ripgrepPath';
-import { RIPGREP_EXCLUDE_ARGS_ARRAY } from '../utils/fileFilters';
+import { streamRipgrepLines } from '../services/ripgrepPath';
+import { QUICKOPEN_FILE_TYPE_ARGS, RIPGREP_EXCLUDE_ARGS_ARRAY } from '../utils/fileFilters';
 import { listIgnoredNestedRepositories } from '../utils/gitUtils';
-
-const execFileAsync = promisify(execFile);
 
 // Binary file extensions to exclude from QuickOpen results
 // Note: Images are NOT excluded - Nimbalyst can display them
@@ -33,35 +29,35 @@ const BINARY_EXTENSIONS = new Set([
 
 const NIMBALYST_LOCAL_DIRNAME = 'nimbalyst-local';
 
-async function runRipgrepFiles(rootPath: string, options?: { noIgnore?: boolean }): Promise<string[]> {
-    const rgPath = getRipgrepPath();
+// Bounds main-process memory and per-keystroke matching when a workspace is
+// something like a home directory. ~4x a 55k-file monorepo.
+const QUICK_OPEN_MAX_FILES = 200_000;
+const CONTENT_SEARCH_MAX_FILES = 50;
+
+async function runRipgrepFiles(rootPath: string, options: { noIgnore?: boolean; maxFiles: number }): Promise<string[]> {
     const rgArgs = [
         '--files',
         '--hidden',  // Include dotfiles like .gitignore
-        ...(options?.noIgnore ? ['--no-ignore'] : []),
+        ...(options.noIgnore ? ['--no-ignore'] : []),
         ...RIPGREP_EXCLUDE_ARGS_ARRAY,
         rootPath
     ];
 
-    let stdout = '';
-    try {
-        const result = await execFileAsync(rgPath, rgArgs, { maxBuffer: 5 * 1024 * 1024 });
-        stdout = result.stdout;
-    } catch (execError: any) {
-        // ripgrep returns exit code 1 when no matches found
-        if (execError.code === 1) {
-            stdout = execError.stdout || '';
-        } else {
-            throw execError;
+    const files: string[] = [];
+    let truncated = false;
+    await streamRipgrepLines(rgArgs, line => {
+        if (!line.trim()) return true;
+        if (files.length >= options.maxFiles) {
+            truncated = true;
+            return false;
         }
+        files.push(path.normalize(line));
+        return true;
+    });
+    if (truncated) {
+        console.warn(`[QuickOpen] Stopped indexing ${rootPath} at ${options.maxFiles} files; quick open and @ mentions will not find the rest`);
     }
-
-    if (!stdout) return [];
-
-    return stdout
-        .split('\n')
-        .filter(line => line.trim())
-        .map(file => path.normalize(file));
+    return files;
 }
 
 /**
@@ -102,15 +98,18 @@ export async function buildQuickOpenCacheForRoot(
 // nimbalyst-local/ so local plan files remain mentionable in @ typeahead, and
 // clones nested in the root, which the root's ignore rules usually hide (#1449).
 // Each clone is scanned under its own ignore rules.
-export async function findWorkspaceFiles(dir: string): Promise<string[]> {
-    const baseFiles = await runRipgrepFiles(dir);
+export async function findWorkspaceFiles(
+    dir: string,
+    { maxFiles = QUICK_OPEN_MAX_FILES }: { maxFiles?: number } = {},
+): Promise<string[]> {
+    const baseFiles = await runRipgrepFiles(dir, { maxFiles });
     const nimbalystLocalPath = path.join(dir, NIMBALYST_LOCAL_DIRNAME);
     const extraFiles = existsSync(nimbalystLocalPath)
-      ? await runRipgrepFiles(nimbalystLocalPath, { noIgnore: true })
+      ? await runRipgrepFiles(nimbalystLocalPath, { noIgnore: true, maxFiles })
       : [];
     const nestedRepoFiles: string[] = [];
     for (const repo of await listIgnoredNestedRepositories(dir)) {
-        nestedRepoFiles.push(...await runRipgrepFiles(repo));
+        nestedRepoFiles.push(...await runRipgrepFiles(repo, { maxFiles }));
     }
 
     return Array.from(new Set([...baseFiles, ...extraFiles, ...nestedRepoFiles]))
@@ -130,5 +129,55 @@ export async function findWorkspaceFiles(dir: string): Promise<string[]> {
 export async function listContentSearchRoots(roots: string[]): Promise<string[]> {
     const nested = await Promise.all(roots.map(root => listIgnoredNestedRepositories(root)));
     return Array.from(new Set([...roots, ...nested.flat()].map(dir => path.resolve(dir))));
+}
+
+export interface ContentSearchResult {
+    path: string;
+    isContentMatch: true;
+    matches: Array<{ line: number; text: string; start: number; end: number }>;
+}
+
+// ripgrep's --json output groups each file's matches together, so stopping at
+// the first match in file N+1 keeps every match from the first N files.
+export async function searchFileContent(
+    roots: string[],
+    query: string,
+    maxFiles = CONTENT_SEARCH_MAX_FILES,
+): Promise<ContentSearchResult[]> {
+    const rgArgs = [
+        ...QUICKOPEN_FILE_TYPE_ARGS,
+        '-i',
+        '--json',
+        ...RIPGREP_EXCLUDE_ARGS_ARRAY,
+        query,
+        // ripgrep takes N search roots directly, so a multi-root
+        // workspace is one invocation, not one per root.
+        ...roots,
+    ];
+
+    const resultsByFile = new Map<string, ContentSearchResult>();
+    await streamRipgrepLines(rgArgs, line => {
+        try {
+            const item = JSON.parse(line);
+            if (item.type !== 'match') return true;
+            const filePath = item.data.path.text;
+            let result = resultsByFile.get(filePath);
+            if (!result) {
+                if (resultsByFile.size >= maxFiles) return false;
+                result = { path: path.normalize(filePath), isContentMatch: true, matches: [] };
+                resultsByFile.set(filePath, result);
+            }
+            result.matches.push({
+                line: item.data.line_number,
+                text: item.data.lines.text.trim(),
+                start: item.data.submatches[0]?.start || 0,
+                end: item.data.submatches[0]?.end || item.data.lines.text.length,
+            });
+        } catch {
+            // Skip invalid JSON lines and non-UTF-8 paths (reported as path.bytes)
+        }
+        return true;
+    });
+    return Array.from(resultsByFile.values());
 }
 

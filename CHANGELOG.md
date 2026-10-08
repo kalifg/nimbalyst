@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Columns in a document no longer show a dashed outline while you read it.
 - A message queued during a Claude Code agent turn no longer cancels a question the agent asks; it waits until you answer and the turn finishes.
 - Enlarging an image an agent showed in the transcript no longer shows a broken image when the file is outside the project folder.
+- `@` file mentions and Quick Open file and content search return results in large repositories instead of nothing.
 
 ### Removed
 <!-- Removed features go here -->

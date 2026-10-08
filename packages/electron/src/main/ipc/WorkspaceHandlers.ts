@@ -20,7 +20,7 @@ import { syncRepresentedFilename, windows as windowsById } from '../window/windo
 import { startFileWatcher, stopFileWatcher } from '../file/FileWatcher';
 import { getFolderContents, listFolderFilesRecursive } from '../utils/FileTree';
 import { decodeTextFileBuffer } from '../utils/textEncoding';
-import { RIPGREP_EXCLUDE_ARGS_ARRAY, QUICKOPEN_FILE_TYPE_ARGS } from '../utils/fileFilters';
+import { RIPGREP_EXCLUDE_ARGS_ARRAY } from '../utils/fileFilters';
 import {
     getWorkspaceRecentFiles,
     addWorkspaceRecentFile,
@@ -39,7 +39,7 @@ import {
 import { workspaceLocalKeyStore } from '../services/tracker/workspaceLocalKeyStore';
 import { database } from '../database/PGLiteDatabaseWorker';
 import { getRipgrepPath } from '../services/ripgrepPath';
-import { findWorkspaceFiles, listContentSearchRoots } from '../file/QuickOpenFileScanner';
+import { findWorkspaceFiles, listContentSearchRoots, searchFileContent } from '../file/QuickOpenFileScanner';
 import { quickOpenFileNameCache } from '../file/QuickOpenFileNameCache';
 
 /**
@@ -347,61 +347,7 @@ export function registerWorkspaceHandlers() {
             const trimmedQuery = query.trim();
             if (!trimmedQuery) return [];
 
-            const rgPath = getRipgrepPath();
-            const rgArgs = [
-                ...QUICKOPEN_FILE_TYPE_ARGS,
-                '-i',
-                '--json',
-                ...RIPGREP_EXCLUDE_ARGS_ARRAY,
-                trimmedQuery,
-                // ripgrep takes N search roots directly, so a multi-root
-                // workspace is one invocation, not one per root.
-                ...await listContentSearchRoots(getWorkspaceRoots(workspacePath))
-            ];
-
-            let stdout = '';
-            try {
-                const result = await execFileAsync(rgPath, rgArgs, { maxBuffer: 5 * 1024 * 1024 });
-                stdout = result.stdout;
-            } catch (execError: any) {
-                // ripgrep returns exit code 1 when no matches found, which is not an error
-                if (execError.code === 1) {
-                    stdout = execError.stdout || '';
-                } else {
-                    throw execError;
-                }
-            }
-
-            const contentMatches = new Map<string, any>();
-            if (stdout) {
-                const lines = stdout.split('\n').filter(line => line.trim());
-                for (const line of lines) {
-                    try {
-                        const item = JSON.parse(line);
-                        if (item.type === 'match') {
-                            const filePath = item.data.path.text;
-                            if (!contentMatches.has(filePath)) {
-                                contentMatches.set(filePath, {
-                                    path: path.normalize(filePath),
-                                    isContentMatch: true,
-                                    matches: []
-                                });
-                            }
-
-                            contentMatches.get(filePath).matches.push({
-                                line: item.data.line_number,
-                                text: item.data.lines.text.trim(),
-                                start: item.data.submatches[0]?.start || 0,
-                                end: item.data.submatches[0]?.end || item.data.lines.text.length
-                            });
-                        }
-                    } catch (e) {
-                        // Skip invalid JSON lines
-                    }
-                }
-            }
-
-            return Array.from(contentMatches.values()).slice(0, 50);
+            return await searchFileContent(await listContentSearchRoots(getWorkspaceRoots(workspacePath)), trimmedQuery);
         } catch (error) {
             console.error('Error searching file content:', error);
             return [];

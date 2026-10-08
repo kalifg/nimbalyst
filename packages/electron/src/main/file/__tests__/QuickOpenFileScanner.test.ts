@@ -6,18 +6,22 @@
  * binaries against an on-disk fixture, because the behavior lives entirely in
  * how those two read ignore rules and `.git` entries.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
+import { mkdtemp, mkdir, writeFile, rm } from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { rgPath } from '@vscode/ripgrep';
 import { assertGitSandbox, FIXTURE_IDENTITY_ARGS, gitSandboxEnv } from '../../services/testSupport/gitTestSandbox';
 import { QUICKOPEN_FILE_TYPE_ARGS, RIPGREP_EXCLUDE_ARGS_ARRAY } from '../../utils/fileFilters';
 
-vi.mock('../../services/ripgrepPath', () => ({ getRipgrepPath: () => rgPath }));
+vi.mock('../../services/ripgrepPath', async importOriginal => ({
+  ...await importOriginal<typeof import('../../services/ripgrepPath')>(),
+  getRipgrepPath: () => rgPath,
+}));
 
-import { findWorkspaceFiles, listContentSearchRoots } from '../QuickOpenFileScanner';
+import { buildQuickOpenCacheForRoot, findWorkspaceFiles, listContentSearchRoots, searchFileContent } from '../QuickOpenFileScanner';
 
 let tmpRoot: string;
 let outer: string;
@@ -103,4 +107,48 @@ describe('findWorkspaceFiles with nested repositories (#1449)', () => {
       expect(matches[0].data.lines.text).toBe(`${needle}\n`);
     }
   });
+});
+
+describe('large workspaces', () => {
+  // Large enough that `rg --files` writes more than the 5MB the scanner used to buffer.
+  const FILE_COUNT = 12_000;
+  const OLD_BUFFER_CAP = 5 * 1024 * 1024;
+  let root: string;
+
+  beforeAll(async () => {
+    root = await mkdtemp(path.join(os.tmpdir(), 'nimbalyst-quickopen-large-'));
+    const dir = path.join(root, 'd'.repeat(200));
+    await mkdir(dir);
+    const names = Array.from({ length: FILE_COUNT }, (_, i) => `${String(i).padStart(5, '0')}${'f'.repeat(190)}.md`);
+    for (let i = 0; i < names.length; i += 500) {
+      await Promise.all(names.slice(i, i + 500).map(name => writeFile(path.join(dir, name), '')));
+    }
+  }, 60_000);
+
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('indexes a root whose file listing is larger than the old 5MB buffer', async () => {
+    const files = (await buildQuickOpenCacheForRoot(root)).filter(item => item.type === 'file');
+    expect(files).toHaveLength(FILE_COUNT);
+    expect(files.reduce((bytes, item) => bytes + item.path.length + 1, 0)).toBeGreaterThan(OLD_BUFFER_CAP);
+  }, 30_000);
+
+  it('truncates the index at maxFiles instead of failing', async () => {
+    expect(await findWorkspaceFiles(root, { maxFiles: 100 })).toHaveLength(100);
+  }, 30_000);
+
+  it('returns complete matches for the first 50 files when ripgrep --json output passes 5MB', async () => {
+    const contentRoot = await mkdtemp(path.join(os.tmpdir(), 'nimbalyst-content-large-'));
+    try {
+      const body = Array.from({ length: 1000 }, (_, i) => `needle ${i} ${'x'.repeat(80)}`).join('\n');
+      await Promise.all(Array.from({ length: 60 }, (_, i) => writeFile(path.join(contentRoot, `file-${i}.md`), body)));
+      const results = await searchFileContent([contentRoot], 'NEEDLE');
+      expect(results).toHaveLength(50);
+      expect(results.every(result => result.matches.length === 1000)).toBe(true);
+    } finally {
+      await rm(contentRoot, { recursive: true, force: true });
+    }
+  }, 30_000);
 });
