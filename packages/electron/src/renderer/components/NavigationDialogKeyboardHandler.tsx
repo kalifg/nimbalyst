@@ -94,7 +94,8 @@ export function NavigationDialogKeyboardHandler({
       if (document.querySelector('[data-testid="unified-quick-open"]')) return;
 
       const isAppModifier = isMac ? e.metaKey : e.ctrlKey;
-      if (!isAppModifier) return;
+      // Ctrl+Alt+L is "next session needing attention" off macOS, where Alt leaves e.key as 'l'.
+      if (!isAppModifier || e.altKey) return;
 
       let initialTab: UnifiedQuickOpenTab | null = null;
       if (e.shiftKey && (e.key === 'P' || e.key === 'p')) initialTab = 'projects';

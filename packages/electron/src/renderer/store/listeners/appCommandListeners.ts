@@ -43,6 +43,9 @@ import {
   type InstallProgressStage,
 } from '../atoms/appCommands';
 import { openSettingsCommandAtom } from '../atoms/settingsNavigation';
+import { nextAttentionSessionIdAtom } from '../atoms/sessions';
+import { setWindowModeAtom } from '../atoms/windowMode';
+import { selectSessionActionAtom } from '../actions/sessionHistoryActions';
 import type {
   SettingsCategory,
   SettingsDestination,
@@ -144,6 +147,14 @@ export function initAppCommandListeners(): () => void {
   subscribeCounter('confirm-close-unsaved', confirmCloseUnsavedRequestAtom);
   subscribeCounter('close-active-tab', closeActiveTabRequestAtom);
   subscribeCounter('reopen-last-closed-tab', reopenLastClosedTabRequestAtom);
+
+  const u6b = window.electronAPI?.on?.('agent:go-to-next-attention-session', () => {
+    const sessionId = store.get(nextAttentionSessionIdAtom);
+    if (!sessionId) return;
+    store.set(setWindowModeAtom, 'agent');
+    void store.set(selectSessionActionAtom, sessionId);
+  });
+  if (typeof u6b === 'function') cleanups.push(u6b);
 
   const u7 = window.electronAPI?.on?.(
     'extension-marketplace:install-request',

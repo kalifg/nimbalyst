@@ -3,9 +3,11 @@ import { createStore } from 'jotai';
 import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '@nimbalyst/runtime';
 import {
+  activeSessionIdAtom,
   agentBubbleStateAtom,
   agentSessionAttentionAtom,
   hasUnansweredInteractivePrompt,
+  nextAttentionSessionIdAtom,
   sessionHasPendingInteractivePromptAtom,
   sessionListWorkspaceAtom,
   sessionProcessingAtom,
@@ -120,6 +122,39 @@ describe('agentSessionAttentionAtom', () => {
     expect(groups.unread.map((item) => item.id)).toEqual(['done-unread']);
     expect(groups.awaitingInput.map((item) => item.id)).toEqual(['done-awaiting']);
     expect(groups.running).toEqual([]);
+  });
+});
+
+describe('nextAttentionSessionIdAtom', () => {
+  it('cycles through sessions awaiting input, newest first, then unread ones', () => {
+    const store = setup(
+      session('asked-earlier', { updatedAt: 1 }),
+      session('asked-later', { updatedAt: 2 }),
+      session('unread', { updatedAt: 3 }),
+      session('running', { updatedAt: 4 }),
+    );
+    store.set(sessionHasPendingInteractivePromptAtom('asked-earlier'), true);
+    store.set(sessionHasPendingInteractivePromptAtom('asked-later'), true);
+    store.set(sessionUnreadAtom('unread'), true);
+    store.set(sessionProcessingAtom('running'), true);
+
+    const visited: Array<string | null> = [];
+    store.set(activeSessionIdAtom, 'running');
+    for (let i = 0; i < 4; i++) {
+      const next = store.get(nextAttentionSessionIdAtom);
+      visited.push(next);
+      store.set(activeSessionIdAtom, next);
+    }
+
+    expect(visited).toEqual(['asked-later', 'asked-earlier', 'unread', 'asked-later']);
+  });
+
+  it('has nowhere to go when only the open session needs attention', () => {
+    const store = setup(session('asked'), session('idle'));
+    store.set(sessionHasPendingInteractivePromptAtom('asked'), true);
+    store.set(activeSessionIdAtom, 'asked');
+
+    expect(store.get(nextAttentionSessionIdAtom)).toBeNull();
   });
 });
 

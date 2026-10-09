@@ -92,6 +92,7 @@ export const KeyboardShortcuts = {
     sessionManager: 'Cmd+Shift+H',
     sessionQuickOpen: 'Cmd+L',
     promptQuickOpen: 'Cmd+Shift+L',
+    nextAttentionSession: 'Cmd+Alt+L',
     contentSearch: 'Cmd+Shift+F',
     globalSearch: 'Cmd+Shift+O',
     teamQuickOpen: 'Cmd+Shift+D',

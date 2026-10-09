@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 <!-- New features go here -->
+- Cmd+Option+L jumps to the next session waiting on you (an open question or unread result), cycling through them.
 
 ### Changed
 <!-- Changes to existing functionality go here -->

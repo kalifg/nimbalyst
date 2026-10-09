@@ -1152,6 +1152,14 @@ export async function createApplicationMenu() {
                     }
                 },
                 {
+                    label: 'Go to Next Session Needing Attention',
+                    accelerator: KeyboardShortcuts.window.nextAttentionSession,
+                    click: () => {
+                        const focused = getFocusedWindow();
+                        if (focused) focused.webContents.send('agent:go-to-next-attention-session');
+                    }
+                },
+                {
                     label: 'Content Search',
                     accelerator: KeyboardShortcuts.window.contentSearch,
                     registerAccelerator: false,

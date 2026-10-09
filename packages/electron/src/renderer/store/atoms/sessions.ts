@@ -231,6 +231,20 @@ export const agentSessionAttentionAtom = atom<AgentSessionAttentionGroups>((get)
   return groups;
 });
 
+/**
+ * Where "Go to Next Session Needing Attention" lands: sessions awaiting input,
+ * then unread ones, cycling from the open session. Null when there is nowhere
+ * else to go.
+ */
+export const nextAttentionSessionIdAtom = atom<string | null>((get) => {
+  const { awaitingInput, unread } = get(agentSessionAttentionAtom);
+  const queue = [...awaitingInput, ...unread].map((session) => session.id);
+  const currentId = get(activeSessionIdAtom);
+  const currentIndex = currentId ? queue.indexOf(currentId) : -1;
+  const nextId = queue[(currentIndex + 1) % queue.length];
+  return nextId && nextId !== currentId ? nextId : null;
+});
+
 /** Highest-priority Agent gutter bubble state. The count matches its color. */
 export const agentBubbleStateAtom = atom<{ color: AgentBubbleColor | null; count: number }>((get) => {
   const groups = get(agentSessionAttentionAtom);
