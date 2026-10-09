@@ -9,6 +9,25 @@ const WINDOW_EDGE_INSET = 100;
 
 export interface RestorableWindowBounds extends Rectangle {
   isMaximized?: boolean;
+  isFullScreen?: boolean;
+}
+
+export interface BoundsSourceWindow {
+  getNormalBounds(): Rectangle;
+  isMaximized(): boolean;
+  isFullScreen(): boolean;
+}
+
+// #1310: getBounds() is the whole display while maximized or fullscreen, which
+// left nothing real to return to after a relaunch.
+export function captureRestorableWindowBounds(
+  window: BoundsSourceWindow
+): RestorableWindowBounds {
+  return {
+    ...window.getNormalBounds(),
+    isMaximized: window.isMaximized(),
+    isFullScreen: window.isFullScreen(),
+  };
 }
 
 function overlapLength(

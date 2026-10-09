@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 <!-- Bug fixes go here -->
+- A window closed in fullscreen now reopens in fullscreen, and fullscreen or maximized windows return to their real size when you leave that mode after a restart
 
 ### Removed
 <!-- Removed features go here -->

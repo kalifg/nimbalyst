@@ -12,8 +12,9 @@ const mocks = vi.hoisted(() => ({
   saveSessionState: vi.fn(),
   windows: new Map<number, {
     isDestroyed(): boolean;
-    getBounds(): { x: number; y: number; width: number; height: number };
+    getNormalBounds(): { x: number; y: number; width: number; height: number };
     isMaximized(): boolean;
+    isFullScreen(): boolean;
   }>(),
   windowStates: new Map<number, { mode: 'workspace'; workspacePath: string }>(),
 }));
@@ -128,8 +129,9 @@ describe('restoreSessionState window activation', () => {
       mocks.windowStates.set(id, { mode: 'workspace', workspacePath });
       mocks.windows.set(id, {
         isDestroyed: () => false,
-        getBounds: () => ({ x: 10, y: 20, width: 800, height: 600 }),
+        getNormalBounds: () => ({ x: 10, y: 20, width: 800, height: 600 }),
         isMaximized: () => false,
+        isFullScreen: () => false,
       });
     }
     mocks.saveSessionState.mockImplementation((state) => mocks.getSessionState.mockReturnValue(state));
