@@ -1,6 +1,7 @@
 import { getProviderCredentials } from '../../credentials/providerCredentials';
 import { findOwnedBackendTool } from '../../../mcp/backendToolRegistry';
 import { resolveBackendWorkspacePath } from '../../../mcp/mcpWorkspaceResolver';
+import { dispatchMetaAgentTool } from '../../../mcp/metaAgentServer';
 import { handleBackendTool } from '../../../mcp/tools/backendToolHandler';
 import { safeHandle } from '../../../utils/ipcRegistry';
 import { getWindowId } from '../../../window/WindowManager';
@@ -8,6 +9,7 @@ import { resolveSenderWorkspacePath } from '../../../window/captureWindowWorkspa
 import { resolveActiveWorkspacePathForWindowId } from '../../../window/windowState';
 import { extensionPromptRequiresConfiguredApiKey, extractModelForProvider, safeSend } from '.././aiServiceUtils';
 import { getLocalHostDeviceId, stampSessionHost } from '.././sessionHostAttribution';
+import { waitForSessionToSettle } from '.././sessionSettle';
 import { type AIServiceContext } from './AIServiceContext';
 import { AIProvider, ModelRegistry, ProviderFactory } from '@nimbalyst/runtime/ai/server';
 import { type AIProviderType, type Message, ModelIdentifier, type ProviderConfig } from '@nimbalyst/runtime/ai/server/types';
@@ -24,7 +26,7 @@ export function registerExtensionChatHandlers(ctx: AIServiceContext): void {
   // Extension SDK: Send a prompt and wait for the full response
   safeHandle('extensions:ai-send-prompt', async (
     event,
-    options: { prompt: string; sessionName?: string; provider?: string; model?: string }
+    options: { prompt: string; sessionName?: string; provider?: string; model?: string; waitUntilSettled?: boolean }
   ) => {
     const { prompt, sessionName } = options;
     const provider = (options.provider || 'claude-code') as AIProviderType;
@@ -95,7 +97,19 @@ export function registerExtensionChatHandlers(ctx: AIServiceContext): void {
     }
 
     const result = await ctx.sendMessageHandler(event, prompt, undefined, session.id, workspacePath);
-    const response = result?.content || '';
+    let response = result?.content || '';
+
+    // The turn above returns as soon as the agent hands work to background
+    // tasks or a wakeup; its text is then an interim status line (#1685).
+    if (options.waitUntilSettled && await waitForSessionToSettle(session.id)) {
+      const finalResult = JSON.parse(
+        await dispatchMetaAgentTool('get_session_result', session.id, workspacePath, {
+          sessionId: session.id,
+          includeFullResponse: true,
+        })
+      ) as { fullResponse?: string | null; lastResponse?: string | null };
+      response = finalResult.fullResponse ?? finalResult.lastResponse ?? response;
+    }
 
     return { sessionId: session.id, response };
   });

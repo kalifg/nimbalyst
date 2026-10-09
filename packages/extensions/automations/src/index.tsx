@@ -41,6 +41,7 @@ export async function activate(context: {
         sessionName?: string;
         provider?: 'claude-code' | 'claude' | 'openai' | 'openai-codex';
         model?: string;
+        waitUntilSettled?: boolean;
       }) => Promise<{ sessionId: string; response: string }>;
     };
   };
@@ -74,6 +75,7 @@ export async function activate(context: {
           sessionName: `Automation: ${status.title}`,
           provider: status.provider || 'claude-code',
           model: status.model,
+          waitUntilSettled: true,
         });
         response = result.response;
         sessionId = result.sessionId;

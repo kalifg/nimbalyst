@@ -239,6 +239,8 @@ Report status.
     expect(sendPrompt).toHaveBeenCalledWith(expect.objectContaining({
       provider: 'openai-codex',
       model: 'openai-codex:gpt-5.6-sol',
+      // #1685: the first turn's text is interim when the agent backgrounds work.
+      waitUntilSettled: true,
     }));
     expect(result).toEqual({
       success: false,

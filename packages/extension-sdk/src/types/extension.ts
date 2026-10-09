@@ -1231,6 +1231,13 @@ export interface ExtensionAIService {
     provider?: 'claude-code' | 'claude' | 'openai' | 'openai-codex';
     /** Model ID (e.g. 'claude-code:opus', 'openai-codex:gpt-5.6-sol'). Uses provider default if omitted. */
     model?: string;
+    /**
+     * Resolve only once the session has settled: no background tasks, queued
+     * prompts, or scheduled wakeups left. `response` is then the session's final
+     * turn rather than the first turn's text. Rejects if the session is still
+     * running after six hours.
+     */
+    waitUntilSettled?: boolean;
   }): Promise<{
     sessionId: string;
     response: string;
