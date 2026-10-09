@@ -6,7 +6,7 @@
  * binaries against an on-disk fixture, because the behavior lives entirely in
  * how those two read ignore rules and `.git` entries.
  */
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import { mkdtemp, mkdir, writeFile, rm } from 'fs/promises';
@@ -110,34 +110,24 @@ describe('findWorkspaceFiles with nested repositories (#1449)', () => {
 });
 
 describe('large workspaces', () => {
-  // Large enough that `rg --files` writes more than the 5MB the scanner used to buffer.
-  const FILE_COUNT = 12_000;
   const OLD_BUFFER_CAP = 5 * 1024 * 1024;
-  let root: string;
-
-  beforeAll(async () => {
-    root = await mkdtemp(path.join(os.tmpdir(), 'nimbalyst-quickopen-large-'));
-    const dir = path.join(root, 'd'.repeat(200));
-    await mkdir(dir);
-    const names = Array.from({ length: FILE_COUNT }, (_, i) => `${String(i).padStart(5, '0')}${'f'.repeat(190)}.md`);
-    for (let i = 0; i < names.length; i += 500) {
-      await Promise.all(names.slice(i, i + 500).map(name => writeFile(path.join(dir, name), '')));
-    }
-  }, 60_000);
-
-  afterAll(async () => {
-    await rm(root, { recursive: true, force: true });
-  });
 
   it('indexes a root whose file listing is larger than the old 5MB buffer', async () => {
-    const files = (await buildQuickOpenCacheForRoot(root)).filter(item => item.type === 'file');
-    expect(files).toHaveLength(FILE_COUNT);
-    expect(files.reduce((bytes, item) => bytes + item.path.length + 1, 0)).toBeGreaterThan(OLD_BUFFER_CAP);
-  }, 30_000);
-
-  it('truncates the index at maxFiles instead of failing', async () => {
-    expect(await findWorkspaceFiles(root, { maxFiles: 100 })).toHaveLength(100);
-  }, 30_000);
+    const root = await mkdtemp(path.join(os.tmpdir(), 'nimbalyst-quickopen-large-'));
+    try {
+      const dir = path.join(root, 'd'.repeat(200));
+      await mkdir(dir);
+      const names = Array.from({ length: 12_000 }, (_, i) => `${String(i).padStart(5, '0')}${'f'.repeat(190)}.md`);
+      for (let i = 0; i < names.length; i += 500) {
+        await Promise.all(names.slice(i, i + 500).map(name => writeFile(path.join(dir, name), '')));
+      }
+      const files = (await buildQuickOpenCacheForRoot(root)).filter(item => item.type === 'file');
+      expect(files).toHaveLength(names.length);
+      expect(files.reduce((bytes, item) => bytes + item.path.length + 1, 0)).toBeGreaterThan(OLD_BUFFER_CAP);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 60_000);
 
   it('returns complete matches for the first 50 files when ripgrep --json output passes 5MB', async () => {
     const contentRoot = await mkdtemp(path.join(os.tmpdir(), 'nimbalyst-content-large-'));

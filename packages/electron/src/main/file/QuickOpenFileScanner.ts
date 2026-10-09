@@ -29,34 +29,22 @@ const BINARY_EXTENSIONS = new Set([
 
 const NIMBALYST_LOCAL_DIRNAME = 'nimbalyst-local';
 
-// Bounds main-process memory and per-keystroke matching when a workspace is
-// something like a home directory. ~4x a 55k-file monorepo.
-const QUICK_OPEN_MAX_FILES = 200_000;
 const CONTENT_SEARCH_MAX_FILES = 50;
 
-async function runRipgrepFiles(rootPath: string, options: { noIgnore?: boolean; maxFiles: number }): Promise<string[]> {
+async function runRipgrepFiles(rootPath: string, options?: { noIgnore?: boolean }): Promise<string[]> {
     const rgArgs = [
         '--files',
         '--hidden',  // Include dotfiles like .gitignore
-        ...(options.noIgnore ? ['--no-ignore'] : []),
+        ...(options?.noIgnore ? ['--no-ignore'] : []),
         ...RIPGREP_EXCLUDE_ARGS_ARRAY,
         rootPath
     ];
 
     const files: string[] = [];
-    let truncated = false;
     await streamRipgrepLines(rgArgs, line => {
-        if (!line.trim()) return true;
-        if (files.length >= options.maxFiles) {
-            truncated = true;
-            return false;
-        }
-        files.push(path.normalize(line));
+        if (line.trim()) files.push(path.normalize(line));
         return true;
     });
-    if (truncated) {
-        console.warn(`[QuickOpen] Stopped indexing ${rootPath} at ${options.maxFiles} files; quick open and @ mentions will not find the rest`);
-    }
     return files;
 }
 
@@ -98,18 +86,15 @@ export async function buildQuickOpenCacheForRoot(
 // nimbalyst-local/ so local plan files remain mentionable in @ typeahead, and
 // clones nested in the root, which the root's ignore rules usually hide (#1449).
 // Each clone is scanned under its own ignore rules.
-export async function findWorkspaceFiles(
-    dir: string,
-    { maxFiles = QUICK_OPEN_MAX_FILES }: { maxFiles?: number } = {},
-): Promise<string[]> {
-    const baseFiles = await runRipgrepFiles(dir, { maxFiles });
+export async function findWorkspaceFiles(dir: string): Promise<string[]> {
+    const baseFiles = await runRipgrepFiles(dir);
     const nimbalystLocalPath = path.join(dir, NIMBALYST_LOCAL_DIRNAME);
     const extraFiles = existsSync(nimbalystLocalPath)
-      ? await runRipgrepFiles(nimbalystLocalPath, { noIgnore: true, maxFiles })
+      ? await runRipgrepFiles(nimbalystLocalPath, { noIgnore: true })
       : [];
     const nestedRepoFiles: string[] = [];
     for (const repo of await listIgnoredNestedRepositories(dir)) {
-        nestedRepoFiles.push(...await runRipgrepFiles(repo, { maxFiles }));
+        nestedRepoFiles.push(...await runRipgrepFiles(repo));
     }
 
     return Array.from(new Set([...baseFiles, ...extraFiles, ...nestedRepoFiles]))
