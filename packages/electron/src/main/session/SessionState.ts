@@ -13,6 +13,7 @@ import { autoMatchTeamForWorkspace } from '../services/TeamService';
 import { updateTrackerSchemaWorkspace } from '../services/TrackerSchemaService';
 import { ensureTrackerSyncForWorkspace } from '../services/TrackerSyncManager';
 import { onStartupActivated } from '../window/StartupActivation';
+import { captureRestorableWindowBounds } from '../window/windowBounds';
 import { shouldSuppressSafeModeSessionSave } from './safeModeSessionState';
 import { getWindowProjectPaths } from '../window/windowState';
 import type { RestoredRail, SessionWindow } from '../types';
@@ -45,10 +46,7 @@ export async function saveSessionState() {
             continue;
         }
 
-        const bounds = {
-            ...window.getBounds(),
-            isMaximized: window.isMaximized(),
-        };
+        const bounds = captureRestorableWindowBounds(window);
         const focusOrder = windowFocusOrder.get(windowId) || 0;
         const devToolsOpen = windowDevToolsState.get(windowId) || false;
         const sessionWindow: any = {

@@ -9,9 +9,23 @@ vi.mock('../../utils/logger', () => ({
 import { revealReadyWindow } from '../revealReadyWindow';
 import {
   beginStartupActivation,
+  finishStartupWindowCreation,
   registerStartupWindow,
   resetStartupActivationForTests,
 } from '../StartupActivation';
+import { captureRestorableWindowBounds, restoreVisibleWindowBounds } from '../windowBounds';
+
+const DISPLAY = { x: 0, y: 0, width: 3008, height: 1692 };
+const NORMAL = { x: 200, y: 150, width: 900, height: 600 };
+
+function persistedBounds(state: { isMaximized: boolean; isFullScreen: boolean }) {
+  const saved = captureRestorableWindowBounds({
+    getNormalBounds: () => NORMAL,
+    isMaximized: () => state.isMaximized,
+    isFullScreen: () => state.isFullScreen,
+  });
+  return restoreVisibleWindowBounds(JSON.parse(JSON.stringify(saved)), [DISPLAY], DISPLAY);
+}
 
 class TestWindow {
   private listeners = new Map<string, Set<(...args: unknown[]) => void>>();
@@ -22,6 +36,7 @@ class TestWindow {
   showInactive = vi.fn(() => this.calls.push('showInactive'));
   focus = vi.fn(() => this.calls.push('focus'));
   maximize = vi.fn(() => this.calls.push('maximize'));
+  setFullScreen = vi.fn((flag: boolean) => this.calls.push(`setFullScreen:${flag}`));
 
   once(event: string, listener: (...args: unknown[]) => void) {
     const wrapped = (...args: unknown[]) => {
@@ -72,6 +87,32 @@ describe('revealReadyWindow', () => {
     );
 
     expect(window.calls).toEqual(['showInactive', 'maximize']);
+  });
+
+  // #1310: getBounds() is the whole display while fullscreen or maximized, so
+  // saving it restored a screen-sized normal window with nothing to return to.
+  it.each([
+    { state: { isMaximized: true, isFullScreen: false }, after: ['maximize', 'show', 'focus'] },
+    { state: { isMaximized: false, isFullScreen: true }, after: ['show', 'focus', 'setFullScreen:true'] },
+  ])('round-trips $state at its normal size', ({ state, after }) => {
+    const bounds = persistedBounds(state);
+    expect(bounds).toEqual({ ...NORMAL, ...state });
+
+    const window = new TestWindow();
+    beginStartupActivation({ platform: 'darwin' });
+    registerStartupWindow(window, { frontmost: true });
+    revealReadyWindow(window, { showInactive: true, startupReveal: true }, bounds);
+    finishStartupWindowCreation();
+
+    expect(window.calls).toEqual(['showInactive', ...after]);
+  });
+
+  it('enters fullscreen right after showing a window opened after startup', () => {
+    const window = new TestWindow();
+
+    revealReadyWindow(window, undefined, persistedBounds({ isMaximized: false, isFullScreen: true }));
+
+    expect(window.calls).toEqual(['show', 'setFullScreen:true']);
   });
 
   it('activates a window opened after startup has finished', () => {

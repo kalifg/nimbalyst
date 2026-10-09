@@ -1,4 +1,4 @@
-import { isStartupCohortWindow, notifyStartupWindowRevealed } from './StartupActivation';
+import { isStartupCohortWindow, notifyStartupWindowRevealed, onStartupActivated } from './StartupActivation';
 import { logger } from '../utils/logger';
 
 export interface RevealableWindow {
@@ -7,6 +7,7 @@ export interface RevealableWindow {
     showInactive(): void;
     focus(): void;
     maximize(): void;
+    setFullScreen(flag: boolean): void;
     isDestroyed(): boolean;
     once(event: 'closed', listener: () => void): unknown;
     removeListener(event: 'closed', listener: () => void): unknown;
@@ -32,11 +33,14 @@ export interface RevealOptions {
  * maximize() runs after the show it belongs to: on a hidden window Electron's
  * maximize() implicitly shows the window, which would reveal (and on macOS
  * reactivate) it ahead of the intended reveal. See PR #1079 review (ghinkle).
+ *
+ * Entering fullscreen switches Spaces on macOS, which activates the app, so a
+ * restored fullscreen window waits for the single startup foregrounding.
  */
 export function revealReadyWindow(
     window: RevealableWindow,
     options: RevealOptions | undefined,
-    savedBounds: { isMaximized?: boolean } | undefined,
+    savedBounds: { isMaximized?: boolean; isFullScreen?: boolean } | undefined,
 ): void {
     const inStartupCohort = options?.startupReveal === true && isStartupCohortWindow(window);
     logger.main.info(
@@ -49,7 +53,11 @@ export function revealReadyWindow(
         window.show();
     }
 
-    if (savedBounds?.isMaximized) {
+    if (savedBounds?.isFullScreen) {
+        onStartupActivated(() => {
+            if (!window.isDestroyed()) window.setFullScreen(true);
+        });
+    } else if (savedBounds?.isMaximized) {
         window.maximize();
     }
 

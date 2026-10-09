@@ -44,7 +44,12 @@ import {
     registerFullScreenChrome,
     titleBarOptionsForWindow,
 } from './windowChrome';
-import { cascadeWindowBounds, restoreVisibleWindowBounds } from './windowBounds';
+import {
+    captureRestorableWindowBounds,
+    cascadeWindowBounds,
+    restoreVisibleWindowBounds,
+    type RestorableWindowBounds,
+} from './windowBounds';
 
 // Window management
 export { windows, windowStates };
@@ -198,7 +203,7 @@ export function createWindow(
     isOpeningFile: boolean = false,
     isWorkspaceMode: boolean = false,
     workspacePath: string | null = null,
-    savedBounds?: { x: number; y: number; width: number; height: number; isMaximized?: boolean },
+    savedBounds?: RestorableWindowBounds,
     options?: CreateWindowOptions
 ): BrowserWindow {
     const startTime = Date.now();
@@ -423,7 +428,7 @@ export function createWindow(
             });
 
             if (state?.mode === 'workspace' && state.workspacePath) {
-                const bounds = window.getBounds();
+                const bounds = captureRestorableWindowBounds(window);
                 const focusOrder = windowFocusOrder.get(windowId) || 0;
                 const devToolsOpen = windowDevToolsState.get(windowId) || false;
 
