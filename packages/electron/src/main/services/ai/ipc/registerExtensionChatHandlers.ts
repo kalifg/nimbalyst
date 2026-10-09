@@ -5,7 +5,7 @@ import { handleBackendTool } from '../../../mcp/tools/backendToolHandler';
 import { safeHandle } from '../../../utils/ipcRegistry';
 import { getWindowId } from '../../../window/WindowManager';
 import { resolveSenderWorkspacePath } from '../../../window/captureWindowWorkspace';
-import { resolveActiveWorkspacePathForWindowId } from '../../../window/windowState';
+import { resolveRequestedWorkspacePathForWindowId } from '../../../window/windowState';
 import { extensionPromptRequiresConfiguredApiKey, extractModelForProvider, safeSend } from '.././aiServiceUtils';
 import { getLocalHostDeviceId, stampSessionHost } from '.././sessionHostAttribution';
 import { type AIServiceContext } from './AIServiceContext';
@@ -24,7 +24,7 @@ export function registerExtensionChatHandlers(ctx: AIServiceContext): void {
   // Extension SDK: Send a prompt and wait for the full response
   safeHandle('extensions:ai-send-prompt', async (
     event,
-    options: { prompt: string; sessionName?: string; provider?: string; model?: string }
+    options: { prompt: string; sessionName?: string; provider?: string; model?: string; workspacePath?: string }
   ) => {
     const { prompt, sessionName } = options;
     const provider = (options.provider || 'claude-code') as AIProviderType;
@@ -32,12 +32,13 @@ export function registerExtensionChatHandlers(ctx: AIServiceContext): void {
       throw new Error('prompt is required');
     }
 
-    // Resolve the workspace from the window, honoring the project rail's
-    // active selection. Reading the raw primary `workspacePath` would route
-    // the new session to the startup project in Multi-Project mode (#544).
+    // Resolve the workspace from the window: the requested project when the
+    // window has it open (#1299), else the rail's active selection. Reading the
+    // raw primary `workspacePath` would route the new session to the startup
+    // project in Multi-Project mode (#544).
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
     const windowId = browserWindow ? getWindowId(browserWindow) : null;
-    const workspacePath = resolveActiveWorkspacePathForWindowId(windowId);
+    const workspacePath = resolveRequestedWorkspacePathForWindowId(windowId, options.workspacePath);
     if (!workspacePath) {
       throw new Error('No workspace path available for extension AI prompt');
     }

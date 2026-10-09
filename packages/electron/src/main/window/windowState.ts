@@ -55,6 +55,24 @@ export function resolveActiveWorkspacePathForWindowId(windowId: number | null | 
 }
 
 /**
+ * Like `resolveActiveWorkspacePathForWindowId`, but honors a caller-requested
+ * project when it is one of the window's rail projects. A scheduled automation
+ * names the project that owns it, so its session must not follow whichever
+ * project is active when the timer fires (#1299).
+ */
+export function resolveRequestedWorkspacePathForWindowId(
+    windowId: number | null | undefined,
+    requestedPath: string | undefined,
+): string | undefined {
+    const state = windowId === null || windowId === undefined ? undefined : windowStates.get(windowId);
+    if (requestedPath && state) {
+        const railPaths = [state.workspacePath, ...(state.additionalWorkspacePaths ?? [])];
+        if (railPaths.includes(requestedPath)) return requestedPath;
+    }
+    return resolveActiveWorkspacePathForWindowId(windowId);
+}
+
+/**
  * Resolve the workspace path whose DocumentService should serve an IPC
  * request for this window. Honors the project rail's active selection so a
  * tracker / document query reads the project the user is currently looking

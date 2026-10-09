@@ -25,22 +25,24 @@ Run the scout.
 `;
 }
 
-function makeHarness(initial: Array<[string, string]> = []) {
+function makeHarness(initial: Array<[string, string]> = [], root?: string) {
   const files = new Map(initial);
+  // The real filesystem service resolves relative paths against the primary project.
+  const resolve = (filePath: string) => (root && !filePath.startsWith('/') ? `${root}/${filePath}` : filePath);
   return {
     files,
     ui: { showInfo: vi.fn(), showWarning: vi.fn(), showError: vi.fn() },
     filesystem: {
       readFile: async (filePath: string) => {
-        const content = files.get(filePath);
+        const content = files.get(resolve(filePath));
         if (content === undefined) throw new Error(`ENOENT: ${filePath}`);
         return content;
       },
       writeFile: async (filePath: string, content: string) => {
-        files.set(filePath, content);
+        files.set(resolve(filePath), content);
       },
-      fileExists: async (filePath: string) => files.has(filePath),
-      findFiles: async () => [...files.keys()].filter((p) => p.startsWith('nimbalyst-local/automations/') && p.endsWith('.md')),
+      fileExists: async (filePath: string) => files.has(resolve(filePath)),
+      findFiles: async () => [...files.keys()].filter((p) => p.includes('nimbalyst-local/automations/') && p.endsWith('.md')),
     },
   };
 }
@@ -81,6 +83,19 @@ Poll.
 
     expect(harness.files.get('nimbalyst-local/automations/poller/poller-log.md')).toContain('all quiet');
     expect(harness.files.has('nimbalyst-local/automations/poller/output.md')).toBe(false);
+  });
+
+  it('creates the session in the project that owns the automation file', async () => {
+    // #1299: with no workspace in the request, the session followed whichever
+    // Multi-Project rail project was active when the run started.
+    const path = '/ws/research/nimbalyst-local/automations/codex-scout.md';
+    const harness = makeHarness([[path, automationFile()]], '/ws/research');
+    const sendPrompt = vi.fn().mockResolvedValue({ sessionId: 's1', response: 'done' });
+
+    await activate({ services: { filesystem: harness.filesystem, ui: harness.ui, ai: { sendPrompt } }, subscriptions: disposables });
+    await aiTools.find((t) => t.name === 'automations.run')!.handler({ id: 'codex-scout' }, {} as never);
+
+    expect(sendPrompt).toHaveBeenCalledWith(expect.objectContaining({ workspacePath: '/ws/research' }));
   });
 
   it('keeps the report the agent wrote instead of overwriting it with the final message', async () => {

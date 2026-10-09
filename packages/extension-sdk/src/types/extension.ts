@@ -1231,6 +1231,11 @@ export interface ExtensionAIService {
     provider?: 'claude-code' | 'claude' | 'openai' | 'openai-codex';
     /** Model ID (e.g. 'claude-code:opus', 'openai-codex:gpt-5.6-sol'). Uses provider default if omitted. */
     model?: string;
+    /**
+     * Project to create the session in. Must be one of the window's open
+     * projects; otherwise, or when omitted, the window's active project is used.
+     */
+    workspacePath?: string;
   }): Promise<{
     sessionId: string;
     response: string;

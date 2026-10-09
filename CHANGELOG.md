@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 <!-- Bug fixes go here -->
+- In a Multi-Project window, an automation's session is created in the project that owns the automation, not whichever project is active when it runs
 
 ### Removed
 <!-- Removed features go here -->

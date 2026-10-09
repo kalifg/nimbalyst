@@ -19,6 +19,11 @@ let scheduler: AutomationScheduler | null = null;
 // Re-export types
 export type { AutomationStatus } from './frontmatter/types';
 
+/** The project an automation file lives in, or undefined for a relative path. */
+function owningProjectPath(filePath: string): string | undefined {
+  return /^(.+)[\\/]nimbalyst-local[\\/]automations[\\/][^\\/]+$/.exec(filePath)?.[1];
+}
+
 /**
  * Extension activation - sets up the scheduler.
  */
@@ -41,6 +46,7 @@ export async function activate(context: {
         sessionName?: string;
         provider?: 'claude-code' | 'claude' | 'openai' | 'openai-codex';
         model?: string;
+        workspacePath?: string;
       }) => Promise<{ sessionId: string; response: string }>;
     };
   };
@@ -55,7 +61,7 @@ export async function activate(context: {
 
   // Wire up the execution callback
   scheduler.setOnFire(async (
-    _filePath: string,
+    filePath: string,
     status: AutomationStatus,
     prompt: string,
   ) => {
@@ -74,6 +80,7 @@ export async function activate(context: {
           sessionName: `Automation: ${status.title}`,
           provider: status.provider || 'claude-code',
           model: status.model,
+          workspacePath: owningProjectPath(filePath),
         });
         response = result.response;
         sessionId = result.sessionId;
@@ -317,7 +324,10 @@ const runAutomationTool: ExtensionAITool = {
     const id = args.id as string;
 
     // Resolve to file path if only an ID was given
-    const filePath = id.endsWith('.md') ? id : `nimbalyst-local/automations/${id}.md`;
+    const relativePath = id.endsWith('.md') ? id : `nimbalyst-local/automations/${id}.md`;
+    // Prefer the discovered absolute path: it tells the run which project owns it.
+    const filePath = scheduler.getAutomations()
+      .find((a) => a.filePath.replace(/\\/g, '/').endsWith(`/${relativePath}`))?.filePath ?? relativePath;
 
     try {
       const result = await scheduler.runNow(filePath);

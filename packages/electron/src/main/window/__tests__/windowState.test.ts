@@ -3,6 +3,7 @@ import {
   windowStates,
   resolveActiveWorkspacePath,
   resolveActiveWorkspacePathForWindowId,
+  resolveRequestedWorkspacePathForWindowId,
   resolveDocumentServicePath,
   windowReferencesWorkspace,
   anyWindowReferencesWorkspace,
@@ -73,6 +74,27 @@ describe('windowState helpers', () => {
         activeWorkspacePath: '/ws/project3',
       }));
       expect(resolveActiveWorkspacePathForWindowId(1)).toBe('/ws/project3');
+    });
+  });
+
+  describe('resolveRequestedWorkspacePathForWindowId', () => {
+    beforeEach(() => {
+      windowStates.set(1, makeState({
+        workspacePath: '/ws/project1',
+        additionalWorkspacePaths: ['/ws/project2'],
+        activeWorkspacePath: '/ws/project2',
+      }));
+    });
+
+    // #1299: a scheduled automation owned by the primary project must not
+    // follow the rail to whichever project happens to be active.
+    it('honors a requested project the window has open, over the active one', () => {
+      expect(resolveRequestedWorkspacePathForWindowId(1, '/ws/project1')).toBe('/ws/project1');
+    });
+
+    it('ignores a requested path the window does not have open', () => {
+      expect(resolveRequestedWorkspacePathForWindowId(1, '/ws/elsewhere')).toBe('/ws/project2');
+      expect(resolveRequestedWorkspacePathForWindowId(1, undefined)).toBe('/ws/project2');
     });
   });
 
