@@ -1750,12 +1750,7 @@ export default function App() {
           editorModeRef.current.selectFile(state.filePath);
         }
       },
-      restoreAgent: (state) => {
-        // Switch to agent mode and select the session
-        if (agentModeRef.current) {
-          agentModeRef.current.openSessionInTab(state.workstreamId);
-        }
-      },
+      restoreAgentSession: (sessionId) => agentModeRef.current?.openSessionInTab(sessionId),
       restoreTracker: (state) => {
         // Restore tracker mode view state
         store.set(trackerModeLayoutAtom, (current) => ({

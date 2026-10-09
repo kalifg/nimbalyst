@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 <!-- Bug fixes go here -->
+- Navigate Back (Cmd+[) now returns to the exact session you were on, and Navigate Forward keeps working after going back between sessions.
 
 ### Removed
 <!-- Removed features go here -->

@@ -22,7 +22,7 @@
  * goBack();
  */
 
-import { atom } from 'jotai';
+import { atom, type Getter, type Setter } from 'jotai';
 import { atomFamily } from '../debug/atomFamilyRegistry';
 import { store } from '@nimbalyst/runtime/store';
 import { activeWorkspacePathAtom } from './openProjects';
@@ -299,7 +299,7 @@ export const pushNavigationEntryAtom = atom(
  */
 interface NavigationRestoreCallbacks {
   restoreFiles?: (state: FilesNavigationState) => void;
-  restoreAgent?: (state: AgentNavigationState) => void;
+  restoreAgentSession?: (sessionId: string) => Promise<void> | void;
   restoreTracker?: (state: TrackerNavigationState) => void;
   restoreSettings?: (state: SettingsHistoryState) => void;
   setMode?: (mode: ContentMode) => void;
@@ -317,113 +317,60 @@ export function registerNavigationRestoreCallbacks(callbacks: NavigationRestoreC
 
 /**
  * Restore a navigation entry (set mode and mode-specific state).
+ * Returns the pending work when the restore is asynchronous.
  */
-function restoreEntry(entry: NavigationEntry): boolean {
-  // Set mode first
-  if (restoreCallbacks.setMode) {
-    restoreCallbacks.setMode(entry.mode);
-  }
+function restoreEntry(entry: NavigationEntry): Promise<void> | void {
+  restoreCallbacks.setMode?.(entry.mode);
 
-  // Then restore mode-specific state
   switch (entry.mode) {
     case 'files':
-      if (entry.files && restoreCallbacks.restoreFiles) {
-        restoreCallbacks.restoreFiles(entry.files);
-        return true;
-      }
-      break;
+      if (entry.files) restoreCallbacks.restoreFiles?.(entry.files);
+      return;
     case 'agent':
-      if (entry.agent && restoreCallbacks.restoreAgent) {
-        restoreCallbacks.restoreAgent(entry.agent);
-        return true;
-      }
-      break;
+      if (entry.agent) return restoreCallbacks.restoreAgentSession?.(entry.agent.childSessionId ?? entry.agent.workstreamId);
+      return;
     case 'tracker':
-      if (entry.tracker && restoreCallbacks.restoreTracker) {
-        restoreCallbacks.restoreTracker(entry.tracker);
-        return true;
-      }
-      break;
+      if (entry.tracker) restoreCallbacks.restoreTracker?.(entry.tracker);
+      return;
     case 'settings':
-      if (entry.settings && restoreCallbacks.restoreSettings) {
-        restoreCallbacks.restoreSettings(entry.settings);
-        return true;
-      }
-      break;
+      if (entry.settings) restoreCallbacks.restoreSettings?.(entry.settings);
+      return;
   }
-  return false;
+}
+
+function restoreHistoryIndex(get: Getter, set: Setter, newIndex: number): void {
+  const state = get(navigationHistoryAtom);
+  set(incrementRestoringAtom);
+  set(navigationHistoryAtom, { ...state, currentIndex: newIndex });
+
+  // Opening a session awaits IPC, and every selection change it makes would
+  // otherwise be recorded as a new visit that truncates forward history.
+  void new Promise<void>((resolve) => resolve(restoreEntry(state.entries[newIndex])))
+    .catch((err) => console.error('[navigationHistory] Restore failed:', err))
+    .finally(() => {
+      // Let React flush the restored state and run the effects it triggers.
+      requestAnimationFrame(() => {
+        setTimeout(() => store.set(decrementRestoringAtom), 0);
+      });
+    });
 }
 
 /**
  * Go back in navigation history.
  */
 export const goBackAtom = atom(null, (get, set) => {
-  const state = get(navigationHistoryAtom);
-
-  if (state.currentIndex <= 0) {
-    return;
-  }
-
-  // Increment restoring counter to prevent recording this navigation
-  set(incrementRestoringAtom);
-
-  // Move back
-  const newIndex = state.currentIndex - 1;
-  const entry = state.entries[newIndex];
-
-  set(navigationHistoryAtom, {
-    ...state,
-    currentIndex: newIndex,
-  });
-
-  // Restore the entry
-  restoreEntry(entry);
-
-  // Decrement restoring counter after React has had time to process state updates
-  // Using requestAnimationFrame + setTimeout ensures we wait for:
-  // 1. React's batched state updates to flush
-  // 2. Any useEffect hooks triggered by the restore to complete
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      store.set(decrementRestoringAtom);
-    }, 0);
-  });
+  const { currentIndex } = get(navigationHistoryAtom);
+  if (currentIndex <= 0) return;
+  restoreHistoryIndex(get, set, currentIndex - 1);
 });
 
 /**
  * Go forward in navigation history.
  */
 export const goForwardAtom = atom(null, (get, set) => {
-  const state = get(navigationHistoryAtom);
-
-  if (state.currentIndex >= state.entries.length - 1) {
-    return;
-  }
-
-  // Increment restoring counter to prevent recording this navigation
-  set(incrementRestoringAtom);
-
-  // Move forward
-  const newIndex = state.currentIndex + 1;
-  const entry = state.entries[newIndex];
-
-  set(navigationHistoryAtom, {
-    ...state,
-    currentIndex: newIndex,
-  });
-
-  // Restore the entry
-  restoreEntry(entry);
-
-  // Decrement restoring counter after React has had time to process state updates
-  // Using requestAnimationFrame + setTimeout ensures we wait for:
-  // 1. React's batched state updates to flush
-  // 2. Any useEffect hooks triggered by the restore to complete
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      store.set(decrementRestoringAtom);
-    }, 0);
-  });
+  const { currentIndex, entries } = get(navigationHistoryAtom);
+  if (currentIndex >= entries.length - 1) return;
+  restoreHistoryIndex(get, set, currentIndex + 1);
 });
 
 // ============================================================
