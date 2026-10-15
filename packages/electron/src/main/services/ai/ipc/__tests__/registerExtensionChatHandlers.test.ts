@@ -8,11 +8,11 @@ const h = vi.hoisted(() => ({
   wakeups: [] as unknown[],
   dispatchMetaAgentTool: vi.fn(),
 }));
-vi.mock('electron', () => ({ BrowserWindow: { fromWebContents: () => null } }));
+vi.mock('electron', () => ({ BrowserWindow: { fromWebContents: () => ({}) } }));
 vi.mock('../../../../utils/ipcRegistry', () => ({ safeHandle: (name: string, handler: Function) => h.handlers.set(name, handler) }));
-vi.mock('../../../../window/WindowManager', () => ({ getWindowId: () => null }));
+vi.mock('../../../../utils/store', () => ({ getAttachedFolders: () => [] }));
+vi.mock('../../../../window/WindowManager', () => ({ getWindowId: () => 1 }));
 vi.mock('../../../../window/captureWindowWorkspace', () => ({ resolveSenderWorkspacePath: () => null }));
-vi.mock('../../../../window/windowState', () => ({ resolveActiveWorkspacePathForWindowId: () => '/ws' }));
 vi.mock('../../../../mcp/backendToolRegistry', () => ({ findOwnedBackendTool: vi.fn() }));
 vi.mock('../../../../mcp/mcpWorkspaceResolver', () => ({ resolveBackendWorkspacePath: vi.fn() }));
 vi.mock('../../../../mcp/tools/backendToolHandler', () => ({ handleBackendTool: vi.fn() }));
@@ -43,7 +43,10 @@ vi.mock('@nimbalyst/runtime/ai/server/SessionStateManager', () => ({
     },
   }),
 }));
+import { windowStates } from '../../../../window/windowState';
 import { registerExtensionChatHandlers } from '../registerExtensionChatHandlers';
+
+windowStates.set(1, { workspacePath: '/ws' } as never);
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const turnEnded = () => h.listeners.forEach((listener) => listener({ type: 'session:completed', sessionId: 's1' }));
