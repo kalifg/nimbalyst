@@ -32,7 +32,7 @@
     "build:mac": "pnpm run build && pnpm run build:extensions && node -r dotenv/config build/configure-build.js && node build/build-with-env.js --mac",
     "build:mac:signed": "pnpm run build && pnpm run build:extensions && node -r dotenv/config build/configure-build.js && node build/build-with-env.js --mac",
     "build:mac:notarized": "pnpm run build && pnpm run build:extensions && node -r dotenv/config build/configure-build.js && REQUIRE_NOTARIZE=true node build/build-with-env.js --mac",
-    "build:mac:local": "SKIP_NOTARIZE=true pnpm run build && pnpm run build:extensions && SKIP_NOTARIZE=true node -r dotenv/config build/configure-build.js && SKIP_NOTARIZE=true node build/build-with-env.js --mac --publish never",
+    "build:mac:local": "SKIP_NOTARIZE=true pnpm run build && pnpm run build:extensions && SKIP_NOTARIZE=true node -r dotenv/config build/configure-build.js && SKIP_NOTARIZE=true node build/build-with-env.js --mac --publish never -c.extraMetadata.nimbalystUpdatePolicy=external",
     "build:mac:release": "pnpm run build && pnpm run build:extensions && node -r dotenv/config build/configure-build.js && REQUIRE_NOTARIZE=true node build/build-with-env.js --mac --publish always",
     "validate:extra-resources": "node build/normalize-extra-resources.js && node build/validate-extra-resources.js",
     "verify:native-runtime": "node build/verify-native-runtime.js",

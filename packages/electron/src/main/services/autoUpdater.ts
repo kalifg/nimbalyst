@@ -33,6 +33,7 @@ export { classifyUpdateError, categorizeDownloadDuration, isWindowsRenameLockErr
 
 // Reminder suppression duration: 24 hours
 const REMINDER_SUPPRESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+const EXTERNAL_UPDATE_MESSAGE = 'This build is maintained by external build automation. Built-in release checks, downloads, and installation are disabled.';
 const GITHUB_UPDATE_PROVIDER = {
   provider: 'github' as const,
   owner: 'nimbalyst',
@@ -46,6 +47,9 @@ const GITHUB_UPDATE_PROVIDER = {
 const getDurationCategory = categorizeDownloadDuration;
 
 export class AutoUpdaterService {
+  // Read the installed metadata: a bundled import would miss electron-builder's extraMetadata.
+  private readonly externallyManaged = app.isPackaged &&
+    JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'package.json'), 'utf8')).nimbalystUpdatePolicy === 'external';
   private updateCheckInterval: NodeJS.Timeout | null = null;
   private isCheckingForUpdate = false;
   private isManualCheck = false; // Track if this is a user-initiated check (for showing up-to-date toast)
@@ -66,11 +70,16 @@ export class AutoUpdaterService {
     log.transports.file.level = 'info';
     autoUpdater.logger = log;
 
-    // Configure auto-updater. autoDownload=true: both background polls and the
-    // manual "Check for Updates" trigger download immediately, then surface a
-    // single "Ready to install" toast. Per maintainer direction on #327.
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
+    // Official builds download after background or manual checks, then show
+    // a single "Ready to install" toast (maintainer direction on #327).
+    autoUpdater.autoDownload = !this.externallyManaged;
+    autoUpdater.autoInstallOnAppQuit = !this.externallyManaged;
+
+    if (this.externallyManaged) {
+      log.info(EXTERNAL_UPDATE_MESSAGE);
+      this.setupIpcHandlers();
+      return;
+    }
 
     // electron-updater's stock Authenticode check times out at 20s, which a
     // freshly downloaded installer can exceed while Defender scans it.
@@ -89,6 +98,7 @@ export class AutoUpdaterService {
   }
 
   private configureFeedURL() {
+    if (this.externallyManaged) return;
     const channel = getReleaseChannel();
 
     log.info(`Configuring ${channel} channel updates from GitHub`);
@@ -372,6 +382,7 @@ export class AutoUpdaterService {
   }
 
   private performQuitAndInstall() {
+    if (this.externallyManaged) return;
     setImmediate(async () => {
       try {
         log.info('Performing quit and install...');
@@ -419,6 +430,10 @@ export class AutoUpdaterService {
 
   private setupIpcHandlers() {
     safeHandle('check-for-updates', async () => {
+      if (this.externallyManaged) {
+        await this.showExternalUpdateMessage();
+        return this.disabledUpdateResult();
+      }
       if (this.isCheckingForUpdate) {
         return { checking: true };
       }
@@ -433,6 +448,7 @@ export class AutoUpdaterService {
     });
 
     safeHandle('download-update', async () => {
+      if (this.externallyManaged) return this.disabledUpdateResult();
       try {
         await autoUpdater.downloadUpdate();
         return { success: true };
@@ -443,8 +459,9 @@ export class AutoUpdaterService {
     });
 
     safeHandle('quit-and-install', () => {
+      if (this.externallyManaged) return this.disabledUpdateResult();
       // Reuse the same quit flow as performQuitAndInstall
-      this.performQuitAndInstall();
+      return this.performQuitAndInstall();
     });
 
     safeHandle('get-current-version', () => {
@@ -453,6 +470,7 @@ export class AutoUpdaterService {
 
     // Toast-based update IPC handlers
     safeOn('update-toast:download', async () => {
+      if (this.externallyManaged) return;
       try {
         log.info('Update toast: Starting download...');
 
@@ -500,6 +518,7 @@ export class AutoUpdaterService {
     });
 
     safeOn('update-toast:install', () => {
+      if (this.externallyManaged) return;
       log.info('Update toast: Installing update...');
 
       // Track install initiated
@@ -517,6 +536,7 @@ export class AutoUpdaterService {
 
     // Deferred install: wait for all AI sessions to finish, then install
     safeOn('update-toast:install-when-idle', () => {
+      if (this.externallyManaged) return;
       log.info('Update toast: Deferring install until AI sessions finish...');
 
       AnalyticsService.getInstance().sendEvent('update_install_deferred', {
@@ -582,6 +602,7 @@ export class AutoUpdaterService {
   }
 
   public startAutoUpdateCheck(intervalMinutes = 60) {
+    if (this.externallyManaged) return;
     // Initial check after 30 seconds
     setTimeout(() => {
       this.checkForUpdates();
@@ -605,6 +626,7 @@ export class AutoUpdaterService {
   }
 
   public async checkForUpdates() {
+    if (this.externallyManaged) return;
     if (this.isCheckingForUpdate) {
       log.info('Already checking for updates, skipping...');
       return;
@@ -619,6 +641,10 @@ export class AutoUpdaterService {
   }
 
   public async checkForUpdatesWithUI() {
+    if (this.externallyManaged) {
+      await this.showExternalUpdateMessage();
+      return;
+    }
     if (this.isCheckingForUpdate) {
       // Already checking, don't show anything - the checking toast is already visible
       return;
@@ -658,6 +684,7 @@ export class AutoUpdaterService {
   }
 
   private async checkAndDownloadLatest() {
+    if (this.externallyManaged) return;
     try {
       // Previously this method called `autoUpdater.checkForUpdates()` immediately
       // before `downloadUpdate()` to "get the absolute latest version" - but on
@@ -683,6 +710,20 @@ export class AutoUpdaterService {
         message: error instanceof Error ? error.message : 'Failed to download the update'
       });
     }
+  }
+
+  private disabledUpdateResult() {
+    return { success: false, disabled: true, message: EXTERNAL_UPDATE_MESSAGE };
+  }
+
+  private async showExternalUpdateMessage() {
+    await dialog.showMessageBox({
+      type: 'info',
+      title: 'Updates managed externally',
+      message: 'Built-in updates are disabled for this build',
+      detail: EXTERNAL_UPDATE_MESSAGE,
+      buttons: ['OK'],
+    });
   }
 }
 
