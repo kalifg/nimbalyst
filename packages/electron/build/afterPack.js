@@ -12,6 +12,7 @@ const { spawnSync } = require('child_process');
 const { relocateClaudeRuntime } = require('./claude-runtime.js');
 const { validatePackagedTutorialProject } = require('./validate-extra-resources.js');
 const { findUnresolvedDependencies } = require('./packaged-dependency-check.js');
+const { stampBuildPatches } = require('./stamp-build-patches.js');
 
 exports.default = async function(context) {
   const { appOutDir, packager } = context;
@@ -169,6 +170,7 @@ exports.default = async function(context) {
   // the build instead of silently shipping.
   validateBundledExtensions(resourcesDir);
   validatePackagedTutorialProject(resourcesDir);
+  stampBuildPatches(resourcesDir);
 
   console.log('AfterPack: Complete');
 };

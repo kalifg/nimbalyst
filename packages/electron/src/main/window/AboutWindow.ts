@@ -2,6 +2,7 @@ import { app, BrowserWindow, nativeTheme } from 'electron';
 import { join } from 'path';
 import { getPreloadPath } from '../utils/appPaths';
 import { getTheme } from '../utils/store';
+import { getInstalledBuildPatches } from './buildPatches';
 
 let aboutWindow: BrowserWindow | null = null;
 
@@ -16,7 +17,7 @@ export function createAboutWindow() {
 
     aboutWindow = new BrowserWindow({
         width: 650,
-        height: 700,
+        height: getInstalledBuildPatches(app.isPackaged) ? 880 : 700,
         resizable: false,
         minimizable: false,
         maximizable: false,

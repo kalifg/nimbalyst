@@ -2,6 +2,7 @@ import { registerProviderCredentialHandlers } from './ProviderCredentialHandlers
 import { registerCloudflareSandboxHandlers } from './CloudflareSandboxHandlers';
 import { BrowserWindow, safeStorage, session, dialog } from 'electron';
 import { getWindowIdForWindow, windowStates } from '../window/windowState';
+import { getInstalledBuildPatches } from '../window/buildPatches';
 import { applyAnalyticsEnabled } from '../services/analytics/applyAnalyticsEnabled';
 import { safeHandle, safeOn } from '../utils/ipcRegistry';
 import { deleteSecretFile, readSecretFile, writeSecretFile } from '../utils/fileUtils';
@@ -370,6 +371,8 @@ export function registerSettingsHandlers() {
         const { app } = require('electron');
         return app.getVersion();
     });
+
+    safeHandle('get-build-patches', () => getInstalledBuildPatches(app.isPackaged));
 
     // AI Chat state has been moved to unified workspace state
     // Use workspace:get-state and workspace:update-state instead

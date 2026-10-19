@@ -355,6 +355,7 @@ interface ElectronAPI {
   getResolvedThemeSync: () => string;
   getThemeBackgroundColorSync: () => string | null;
   getAppVersion: () => Promise<string>;
+  getBuildPatches: () => Promise<import('../shared/buildPatches').BuildPatches | null>;
   setTheme: (theme: string) => Promise<void>;
 
   // File operations

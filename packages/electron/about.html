@@ -261,6 +261,85 @@
         background: #444;
       }
 
+      /* Only locally patched builds carry a patch list (see build/stamp-build-patches.js) */
+      body.has-build-patches .about-container {
+        justify-content: safe center;
+        overflow-y: auto;
+      }
+
+      .about-build-patches {
+        width: 100%;
+        max-width: 540px;
+        margin: 0 auto 25px;
+        text-align: left;
+        font-size: 12px;
+        color: #555;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+
+      .about-build-patches-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 6px;
+      }
+
+      .about-build-patches-base {
+        font-weight: 400;
+        color: #888;
+      }
+
+      .about-build-patches ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-height: 230px;
+        overflow-y: auto;
+        border-top: 1px solid #e0e0e0;
+      }
+
+      .about-build-patches li {
+        padding: 4px 0;
+        border-bottom: 1px solid #eee;
+      }
+
+      .about-build-patches code {
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        font-size: 11px;
+      }
+
+      .about-build-patches .patch-sha {
+        color: #888;
+        margin-left: 6px;
+      }
+
+      .about-build-patches a {
+        color: #0066cc;
+        text-decoration: none;
+        margin-left: 6px;
+      }
+
+      .about-build-patches .patch-note {
+        color: #777;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .about-build-patches { color: #bbb; }
+        .about-build-patches ul { border-top-color: #444; }
+        .about-build-patches li { border-bottom-color: #3a3a3a; }
+        .about-build-patches a { color: #66b3ff; }
+        .about-build-patches .patch-note { color: #999; }
+      }
+
+      body.dark-theme .about-build-patches { color: #bbb; }
+      body.dark-theme .about-build-patches ul { border-top-color: #444; }
+      body.dark-theme .about-build-patches li { border-bottom-color: #3a3a3a; }
+      body.dark-theme .about-build-patches a { color: #66b3ff; }
+      body.dark-theme .about-build-patches .patch-note { color: #999; }
+
     </style>
   </head>
   <body>
@@ -282,6 +361,11 @@
           <li>Open storage of content and status in plain files on disk and git.</li>
         </ul>
       </div>
+
+      <section class="about-build-patches" id="build-patches" hidden>
+        <p class="about-build-patches-title">kalifg mods <span class="about-build-patches-base" id="build-patches-base"></span></p>
+        <ul id="build-patches-list"></ul>
+      </section>
 
       <div class="about-footer">
         <p>Built with ❤️ by <a href="https://nimbalyst.com" id="nimbalyst-link">Nimbalyst</a></p>
@@ -335,6 +419,53 @@
             if (el) el.textContent = `Version ${version}`;
           }
         } catch {}
+      })();
+
+      (async () => {
+        let build;
+        try {
+          build = await window.electronAPI?.getBuildPatches?.();
+        } catch {}
+        if (!build?.patches?.length) return;
+
+        const externalLink = (label, url) => {
+          const a = document.createElement('a');
+          a.href = url;
+          a.textContent = label;
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.electronAPI?.openExternal?.(url);
+          });
+          return a;
+        };
+
+        if (build.base) {
+          const base = document.getElementById('build-patches-base');
+          base.append('on upstream ');
+          base.append(externalLink(build.base.sha, build.base.url));
+        }
+        const list = document.getElementById('build-patches-list');
+        for (const patch of build.patches) {
+          const item = document.createElement('li');
+          const branch = document.createElement('code');
+          branch.textContent = patch.branch;
+          const sha = document.createElement('span');
+          sha.className = 'patch-sha';
+          sha.textContent = patch.sha;
+          item.append(branch, sha);
+          if (patch.issue) item.append(externalLink(`#${patch.issue.number}`, patch.issue.url));
+          if (patch.pr) item.append(externalLink(`PR #${patch.pr.number}`, patch.pr.url));
+          if (patch.note) {
+            const note = document.createElement('div');
+            note.className = 'patch-note';
+            note.textContent = patch.note;
+            note.title = patch.note;
+            item.append(note);
+          }
+          list.append(item);
+        }
+        document.body.classList.add('has-build-patches');
+        document.getElementById('build-patches').hidden = false;
       })();
 
       // Handle link clicks
