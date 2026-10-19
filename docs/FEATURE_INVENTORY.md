@@ -571,7 +571,7 @@ Companion app; pairs with a desktop over encrypted sync. Voice mode is not inclu
 - Dock badge for sessions needing attention
 - OS notifications for session events
 - Sound notifications
-- Auto-updater with toast notification
+- Auto-updater with toast notification; local macOS builds opt out of built-in release checks, downloads, and installation in favor of external build automation
 - Deferred restart (waits for active AI sessions)
 - Linux `.deb` package for Debian and Ubuntu, which starts on Ubuntu 24.04 and later where the AppImage is blocked by AppArmor's user-namespace restriction
 - SQLite for new installs and migration from existing PGLite databases, retaining original data and recovery copies; databases up to 3 GiB are migrated automatically at startup and larger ones are offered a one-time migration prompt at launch and can migrate from Database settings, which every install still on PGLite can see; backup and recovery controls in Database settings
