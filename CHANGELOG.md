@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <!-- Bug fixes go here -->
 - In Claude Agent sessions with automatic review on, approving a tool call the automatic review blocked now lets that call run instead of being blocked again; "Always" approvals saved to the project's local Claude settings now apply to tools such as sub-agents, and an approval prompt whose turn already ended now shows as cancelled instead of staying clickable
 - `@` file mentions and Quick Open file and content search return results in large repositories instead of nothing.
+- Quick Open's In Files search finds the exact text typed, including characters such as `(`, `$` or a leading `-`, and highlights the right part of indented lines.
 - In Claude Agent sessions on Opus 5.5 and Fable 5, the short summary the model returns in place of text written between tool calls now shows as a visible line in the transcript instead of inside a collapsed Thinking box; the full original text is not returned by the API and still can't be shown
 - The background scan for Claude Code and Codex session files now waits before retrying a file that failed to import, starting at 1 minute and growing to 30, instead of retrying it on every pass; a file that changes on disk is still retried right away
 - Files deleted from a synced project, including a whole deleted folder or files deleted while Nimbalyst was closed, are now removed from document sync instead of being written back to disk on the next sync; a file edited on another device since is still restored

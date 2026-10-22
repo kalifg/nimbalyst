@@ -122,6 +122,23 @@ export interface ContentSearchResult {
     matches: Array<{ line: number; text: string; start: number; end: number }>;
 }
 
+// ripgrep reports submatch offsets in bytes of the untrimmed line; the UI
+// slices the trimmed string by UTF-16 index.
+function trimmedMatch(
+    lineText: string,
+    submatch: { start: number; end: number } | undefined,
+): { text: string; start: number; end: number } {
+    const text = lineText.trim();
+    if (!submatch) return { text, start: 0, end: text.length };
+    const leadingWhitespace = lineText.length - lineText.trimStart().length;
+    const lineBytes = Buffer.from(lineText, 'utf8');
+    const toTextIndex = (byteOffset: number) => Math.min(
+        text.length,
+        Math.max(0, lineBytes.subarray(0, byteOffset).toString('utf8').length - leadingWhitespace),
+    );
+    return { text, start: toTextIndex(submatch.start), end: toTextIndex(submatch.end) };
+}
+
 // ripgrep's --json output groups each file's matches together, so stopping at
 // the first match in file N+1 keeps every match from the first N files.
 export async function searchFileContent(
@@ -132,8 +149,11 @@ export async function searchFileContent(
     const rgArgs = [
         ...typeArgs,
         '-i',
+        '--fixed-strings',
         '--json',
         ...RIPGREP_EXCLUDE_ARGS_ARRAY,
+        // `--` keeps a query that starts with `-` from being read as an option.
+        '--',
         query,
         // ripgrep takes N search roots directly, so a multi-root
         // workspace is one invocation, not one per root.
@@ -152,12 +172,7 @@ export async function searchFileContent(
                 result = { path: path.normalize(filePath), isContentMatch: true, matches: [] };
                 resultsByFile.set(filePath, result);
             }
-            result.matches.push({
-                line: item.data.line_number,
-                text: item.data.lines.text.trim(),
-                start: item.data.submatches[0]?.start || 0,
-                end: item.data.submatches[0]?.end || item.data.lines.text.length,
-            });
+            result.matches.push({ line: item.data.line_number, ...trimmedMatch(item.data.lines.text, item.data.submatches[0]) });
         } catch {
             // Skip invalid JSON lines and non-UTF-8 paths (reported as path.bytes)
         }

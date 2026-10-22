@@ -14,7 +14,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { rgPath } from '@vscode/ripgrep';
 import { assertGitSandbox, FIXTURE_IDENTITY_ARGS, gitSandboxEnv } from '../../services/testSupport/gitTestSandbox';
-import { QUICKOPEN_FILE_TYPE_ARGS, RIPGREP_EXCLUDE_ARGS_ARRAY } from '../../utils/fileFilters';
+import { QUICKOPEN_FILE_TYPE_ARGS } from '../../utils/fileFilters';
 
 vi.mock('../../services/ripgrepPath', async importOriginal => ({
   ...await importOriginal<typeof import('../../services/ripgrepPath')>(),
@@ -95,17 +95,44 @@ describe('findWorkspaceFiles with nested repositories (#1449)', () => {
     const roots = await listContentSearchRoots([outer, inner]);
 
     expect(roots).toEqual([outer, inner, path.join(outer, 'mirror')]);
-    // Exercise the argument shapes used by both content-search handlers.
-    for (const types of [QUICKOPEN_FILE_TYPE_ARGS, ['--type', 'md']]) {
-      const stdout = execFileSync(rgPath, [
-        ...types, '-i', '--json', ...RIPGREP_EXCLUDE_ARGS_ARRAY, needle, ...roots,
-      ], { encoding: 'utf8' });
-      const matches = stdout.trim().split('\n').map(line => JSON.parse(line))
-        .filter(item => item.type === 'match');
-      expect(matches.map(item => path.normalize(item.data.path.text)))
-        .toEqual([path.join(inner, 'src', 'content.md')]);
-      expect(matches[0].data.lines.text).toBe(`${needle}\n`);
+    // Exercise the file types used by both content-search handlers.
+    for (const typeArgs of [QUICKOPEN_FILE_TYPE_ARGS, ['--type', 'md']]) {
+      const results = await searchFileContent(roots, needle, { typeArgs });
+      expect(results.map(result => result.path)).toEqual([path.join(inner, 'src', 'content.md')]);
+      expect(results[0].matches.map(match => match.text)).toEqual([needle]);
     }
+  });
+});
+
+describe('searchFileContent query', () => {
+  function highlighted(results: Awaited<ReturnType<typeof searchFileContent>>): string[] {
+    return results.flatMap(result => result.matches.map(match => match.text.slice(match.start, match.end)));
+  }
+
+  it('finds the typed text literally, including regex syntax and a leading dash', async () => {
+    const root = path.join(tmpRoot, 'search');
+    write(path.join(root, 'notes.md'), [
+      'call foo(bar) here',
+      'costs $5 each',
+      'pass -v flag to it',
+      '--files stays text',
+      'a.b dotted',
+      'axb matches only as a regex',
+    ].join('\n'));
+
+    for (const query of ['foo(', '$5', '-v flag', '--files', 'a.b']) {
+      expect(highlighted(await searchFileContent([root], query))).toEqual([query]);
+    }
+  });
+
+  it('highlights the match in the trimmed line, counting characters rather than bytes', async () => {
+    const root = path.join(tmpRoot, 'search');
+    write(path.join(root, 'indented.md'), '    café 🙂 NEEDLE\n');
+
+    const results = await searchFileContent([root], 'needle');
+
+    expect(results[0].matches[0].text).toBe('café 🙂 NEEDLE');
+    expect(highlighted(results)).toEqual(['NEEDLE']);
   });
 });
 
