@@ -122,6 +122,6 @@ If any session failed to produce a verdict, surface that explicitly:
 
 - **Never** write a prompt that describes the slash command. The spawned session's prompt must start with the literal characters `/review-contribution `.
 - **Never** spawn more than `concurrency` sessions in flight at once.
-- **Never** touch the working directory or invoke `gh pr checkout`, `git checkout`, `git fetch`, or any write operation. The dispatcher only runs `gh pr view <pr> --json title -q .title` (read-only) and the spawned sessions inherit `/review-contribution`'s own no-touch rules.
+- **Preserve the shared checkout.** The dispatcher only reads PR metadata and orchestrates sessions. Spawned reviewers inherit `/review-contribution`'s permission to create focused validation code and run tests or builds in separate temporary exact-head checkouts. Give them test-capable tools, not read-only scope; do not add blanket no-test instructions.
 - **Never** post comments, approvals, or review decisions on GitHub from either the dispatcher or the spawned sessions.
 - **Never** review a PR inline yourself by reading its diff. The whole point of dispatching is to let parallel sessions do the work. Your job is parse + spawn + throttle + summarize.

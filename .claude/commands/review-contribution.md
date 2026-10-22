@@ -4,25 +4,16 @@ description: Review a community-contributed PR for safety, correctness, and adhe
 ---
 Review a community-contributed PR and answer one question: **is there anything that blocks merging?** Non-blocking improvements get a brief mention so the maintainer can clean them up post-merge -- they do not belong in the response to the contributor.
 
-## CRITICAL: Do NOT touch the working directory
+## CRITICAL: Preserve the shared checkout; verify in isolation
 
-This review runs **entirely from the GitHub API** via `gh`. The user's current working directory is off-limits.
+Review-only permits creating and running focused validation code. It does not authorize production fixes or publishing anything.
 
-**Forbidden** -- never run, even "just to look":
-- `gh pr checkout`, `git checkout`, `git switch`, `git restore`
-- `git fetch`, `git pull`, `git remote add`, `git remote update`
-- `git apply`, `git am`, `git cherry-pick`, `git merge`, `git rebase`
-- `git stash` (any form), `git reset`, `git clean`, `git add`
-- Any command that creates or moves refs (including `gh pr checkout --detach`, `git fetch origin pull/N/head`)
-- Any write to files in the working tree
-- `gh pr merge`, `gh pr review --approve|--request-changes|--comment`, `gh pr comment`, `gh pr edit`
-
-**Allowed** -- read-only only:
-- `gh pr view`, `gh pr diff`, `gh pr checks`, `gh pr list`, `gh api` (GET only)
-- `git log`, `git show`, `git rev-parse`, `git config --get`
-- `Read` / `Grep` / `Glob` against the maintainer's already-checked-out `HEAD` (useful as "what does this file look like today" context, not as the PR content itself).
-
-If the maintainer has uncommitted changes or is on a feature branch, **do not care** -- the review does not depend on working-directory state and must not modify it.
+- Read live PR metadata, diff, source, reviews and checks through the GitHub connector or `gh` (GET only).
+- When tests or builds are needed to verify correctness or assumptions, prepare a separate temporary clone or checkout of the exact PR head SHA. You may fetch and check out that SHA in the isolated clone, create or extend focused tests or reproduction code there, and run the needed commands. Do not merge current main into the tested PR; assess integration conflicts separately.
+- Keep the maintainer's shared working tree, index and refs untouched. Do not switch its branch, fetch into it, apply patches to it, stash, reset or clean it. Existing uncommitted changes belong to their current owner.
+- Do not fix production code, commit, push, merge, edit the PR, or publish comments or reviews unless separately authorized.
+- Give delegated reviewers test-capable tools (`toolScope: "full"` where applicable), with the same isolation boundary. Do not add blanket no-test instructions.
+- Review the execution surface below before running contributed code. Report the tested SHA, validation directory, commands, results and real blockers. Distinguish reproduced findings from source inspection and inference.
 
 ## Argument
 
@@ -30,27 +21,22 @@ If the maintainer has uncommitted changes or is on a feature branch, **do not ca
 
 A PR identifier is **required**. If the user runs `/review-contribution` with no argument, ask for a PR number or URL.
 
-## Session phase: `planning`, never `validating`
+## Session phase
 
-Call `update_session_meta` once at the start with `phase: "planning"` and leave it there for the whole review:
+Start source inspection with `phase: "planning"`:
 
 ```
 update_session_meta({ name: "PR #<number> contribution review", add: ["review", "github-pr"], phase: "planning" })
 ```
 
-Reading someone else's code and deciding what to do about it is exploration, and this command writes no code of its own. `validating` means **we** made a change and are now testing it -- a session that has edited nothing has nothing to validate. Two specific traps:
-
-- **Reaching the verdict does not advance the phase.** Producing the report is this session's deliverable, exactly like a plan or a design doc; it stays `planning` when it's done, and the board is not wrong for showing it there.
-- **The tracker status is not the session phase.** Steps 3 and 7 move the `github-pr` item through `inspecting -> safe | needs-review`. That is the PR's state, not this session's. Never mirror it into `update_session_meta`.
-
-If the review turns into actual work -- the maintainer asks you to fix the PR's problems yourself in a worktree -- that is when the phase moves to `implementing`, and `validating` only once you are testing those edits.
+Use `validating` when running focused tests or reproductions in isolation. A source-only review stays `planning`, even after its report is finished. Steps 3 and 7 update the PR tracker status, which is separate from this session's phase. Production fixes require a separate instruction and move the session to `implementing`.
 
 ## Steps
 
-### 1. Gather PR context (via gh, no checkout)
+### 1. Gather PR context (via gh)
 
 ```bash
-gh pr view <pr> --json number,title,author,body,headRefName,baseRefName,headRepositoryOwner,additions,deletions,changedFiles,labels,state,mergeable,mergeStateStatus,reviewDecision,files,commits,isCrossRepository
+gh pr view <pr> --json number,title,author,body,headRefName,headRefOid,baseRefName,headRepositoryOwner,additions,deletions,changedFiles,labels,state,mergeable,mergeStateStatus,reviewDecision,files,commits,isCrossRepository
 gh pr diff <pr>
 gh pr checks <pr>
 ```
@@ -122,7 +108,7 @@ If nothing hits a tier, say so in one line ("no privileged paths touched") and m
 
 ### 3. Sync the PR tracker -- mark `inspecting`
 
-Keep the `github-pr` tracker in step with the review so the board reflects what's been looked at. Together with step 7 and the session metadata, this is the only write the command performs, and it touches the tracker DB only -- never the working directory. Moving the item to `inspecting` says the **PR** is being looked at; the session phase stays `planning`.
+Keep the `github-pr` tracker in step with the review so the board reflects what's been looked at. These writes touch the tracker DB, separate from any isolated validation files. Moving the item to `inspecting` says the **PR** is being looked at; source inspection starts in `planning`.
 
 1. Look the item up **by number** — never list all PRs. Filter server-side on `prNumber` so exactly the matching row comes back:
    ```
@@ -221,7 +207,7 @@ tracker_update({ id: "<same id from step 3>", fields: {
 
 Optionally drop a one-line verdict summary into the `notes` field. Skip silently if tracker tools are unavailable.
 
-Leave the session phase on `planning` when you do this -- `safe` / `needs-review` describes the PR, not this session, and the review ending is not a reason to advance it.
+Keep the session phase appropriate to its work (`planning` for source-only review, `validating` for test execution). `safe` / `needs-review` describes the PR, not this session, and the review ending is not a reason to advance it.
 
 ## Supply-chain review checklist
 
@@ -350,4 +336,4 @@ Target length: 2-5 sentences for SAFE PRs, up to ~10 lines if there are blockers
 
 ---
 
-**Reminder:** This is a review only. Do not modify the working directory, do not check out / fetch / apply the PR, do not push, and do not comment on the PR. The review runs entirely from `gh` API output plus reads against the maintainer's existing `HEAD`. The **only** allowed writes are the `github-pr` tracker status sync (steps 3 and 7), the session link (step 3), and the `update_session_meta` call that sets this session to `planning` -- these touch the tracker DB and session metadata, not the working tree or GitHub.
+**Reminder:** Create and run focused verification tests when needed in an isolated exact-head checkout. Preserve the shared working tree, index and refs. Keep production fixes, commits and GitHub publication outside review scope; report the tested SHA, commands, results and verification limits.

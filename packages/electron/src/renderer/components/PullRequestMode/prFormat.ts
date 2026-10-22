@@ -34,11 +34,12 @@ export function buildReviewContributionDraft(remote: string, prNumber: number): 
   return [
     `Review pull request ${url} (repo ${remote}, PR #${prNumber}) and report your findings here.`,
     '',
-    'This is a read-only review. Do not edit, commit, push, merge, or post anything to GitHub.',
+    'Review only: preserve the shared checkout, index, and refs. Do not fix production code, commit, push, merge, or post anything to GitHub.',
+    'You may create focused tests or reproduction code and run tests or builds needed to verify correctness and assumptions. Use a separate temporary clone or checkout of the exact PR head; do not fetch into or switch the shared checkout. Give delegated reviewers test-capable tools, not read-only scope.',
     '',
     `1. Read the PR: \`gh pr view ${prNumber} --repo ${remote}\` and \`gh pr diff ${prNumber} --repo ${remote}\`, plus the surrounding code for context.`,
     '2. Look for correctness bugs, regressions, missing tests, and mismatches with the conventions already used in the files it touches.',
-    '3. Reply with a one-line recommendation, then the findings most important first, each citing file and line.',
+    '3. Reply with a one-line recommendation, then the findings most important first, each citing file and line. Include the reviewed head SHA, test commands and results, and any verification limits; distinguish reproduced findings from source inspection and inference.',
   ].join('\n');
 }
 

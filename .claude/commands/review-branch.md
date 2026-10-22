@@ -1,16 +1,17 @@
 ---
 name: review-branch
-description: Review all changes in current branch (read-only analysis)
+description: Review all changes in current branch with focused verification tests
 ---
-Perform a comprehensive read-only review of code changes.
+Perform a comprehensive review of code changes, using focused tests to verify correctness and assumptions where needed.
 
 **Scope:** By default, review the current git branch changes using the command below. However, if the user specifies a different scope (e.g., specific files, a directory, a PR, or a commit range), respect that and adjust your review accordingly.
 
-**CRITICAL: This is a READ-ONLY review. Do NOT:**
-- Make any code changes
-- Create or modify files
-- Run git commands (commit, push, merge, etc.)
-- Only exception: You may run git commands to READ information (diff, log, status, show)
+**CRITICAL: Protect the shared checkout and keep fixes separate from review.**
+- Do not edit its working tree, index or refs, switch its branch, or fetch into it.
+- You may prepare a separate temporary clone or checkout, create focused tests or reproduction code, and run tests or builds needed to verify the review. For a PR, use its exact head SHA; for local uncommitted changes, preserve them in an isolated snapshot and report that scope.
+- Do not fix production code, commit, push, merge or publish a review unless separately authorized.
+- Give delegated reviewers test-capable tools (`toolScope: "full"` where applicable). Do not impose blanket no-test instructions.
+- Report the tested SHA or snapshot, commands, results and real verification blockers. Distinguish reproduced findings from source inspection and inference.
 
 **Steps:**
 
@@ -235,4 +236,4 @@ Based on the review findings, here are the recommended actions:
 
 ---
 
-**Remember:** This is a review only. Do not make any changes or take any git actions unless explicitly asked by the user.
+**Remember:** Review includes focused validation in isolation. Preserve the shared checkout and leave production fixes, commits and publication to a separately authorized task.

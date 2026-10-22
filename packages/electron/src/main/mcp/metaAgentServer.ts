@@ -192,7 +192,7 @@ export const META_AGENT_TOOL_DEFS: Array<{
   {
     name: "create_session",
     description:
-      "Spawn a new child session for a focused task. Can optionally create a dedicated worktree or attach the session to an existing worktree, then seed it with an initial prompt. Pass toolScope to control the child's capabilities: use \"read\" or \"write\" for analyze/research tasks so the child cannot run builds or claim to have run them; \"full\" (default) grants run_command.",
+      "Spawn a new child session for a focused task and seed it with an initial prompt. Children inherit the shared workspace. Pass toolScope to control capabilities: use \"full\" (default) for code reviews and other tasks that may need verification tests or builds. Use \"read\" or \"write\" only when execution is intentionally excluded. Tell reviewers to run validation in a separate temporary clone or checkout and preserve the shared working tree, index, and refs.",
     inputSchema: {
       type: "object",
       properties: {
@@ -216,7 +216,7 @@ export const META_AGENT_TOOL_DEFS: Array<{
         useWorktree: {
           type: "boolean",
           description:
-            "Ignored. Child sessions always run in the SHARED workspace so you (the parent) can read the files they write and synthesize them. A fresh worktree would isolate the child's deliverable where you cannot reach it. Tell the child to save deliverables to the workspace root.",
+            "Ignored. Children inherit the shared workspace. For review validation, tell the child to prepare a separate temporary clone or checkout using its command tools and report its path and results; do not edit the shared working tree.",
         },
         worktreeId: {
           type: "string",
@@ -226,7 +226,7 @@ export const META_AGENT_TOOL_DEFS: Array<{
           type: "string",
           enum: ["read", "write", "full"],
           description:
-            "Capability scope for the child. \"read\" = read_file/list_files/search_files only (pure investigation). \"write\" = those plus write_file but NO run_command, so the child can save a file deliverable (e.g. a report) yet cannot build/test/run anything. \"full\" (default) = all tools including run_command. Use read or write for analyze/research tasks so the child physically cannot run a build, and reserve full for tasks that must build/test.",
+            "Capability scope for the child. \"read\" = read_file/list_files/search_files only. \"write\" adds write_file but excludes run_command. \"full\" (default) includes all tools, including commands for verification tests and builds. Code reviews should use full so the reviewer can create and run focused validation code in an isolated checkout; review-only means no production fixes or publication, not no testing. Choose read or write only when execution is intentionally excluded.",
         },
         effortLevel: {
           type: "string",

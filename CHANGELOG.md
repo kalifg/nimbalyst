@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 <!-- Changes to existing functionality go here -->
+- PR reviews can create and run focused verification tests in isolated checkouts while preserving the shared workspace
 - Opening a local wiki page from Quick Open or from a file link in an AI transcript now shows it in Pages mode instead of Files
 - On the SQLite database, tool output older than 30 days in agent transcripts is now replaced with a placeholder by a daily background pass; your prompts, agent replies and tool calls are kept. Shrinking the file on disk is still the Vacuum action in the database dashboard
 - Completed and failed queued prompts older than 30 days are now deleted automatically

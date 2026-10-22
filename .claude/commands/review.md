@@ -1,6 +1,6 @@
 ---
 name: review
-description: Review a design plan, an implementation, or a Nimbalyst session's work (read-only critique)
+description: Review a design plan, implementation, or session, with focused validation when needed
 ---
 
 # Review
@@ -104,7 +104,8 @@ Then call `AskUserQuestion` offering: apply the blocking fixes, apply everything
 
 ## Rules
 
-- **Read-only by default.** Do not edit code or plan docs until the user picks an action in step 4. Reading, grepping, `git log`/`git diff`/`git show`, log tools, and database queries are all fine.
+- **Keep fixes separate from review.** Preserve the shared working tree, index and refs. You may create focused tests or reproduction code and run tests or builds in a separate temporary clone or checkout to verify correctness and assumptions. Use the exact reviewed head, or an isolated snapshot for uncommitted changes, and report the tested scope, commands, results and verification limits. Do not fix production code or plan docs until the user picks an action in step 4.
+- **Keep review tools test-capable.** Give delegated reviewers `toolScope: "full"` where applicable; do not impose blanket no-test instructions.
 - **Do not commit.**
 - **Run your own observation commands.** Logs, database, `curl`, `wrangler tail`, `gh` — you have direct tool access. Never ask the user to paste output.
 - **Be specific or say nothing.** "Consider adding error handling" is noise. "`applyRemoteItem` at `x.ts:88` trusts `data->'labelsMap'` is an object; on SQLite it's a JSON string, so labels get dropped" is a review.

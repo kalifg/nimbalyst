@@ -143,7 +143,7 @@ Spawn one reviewer for the whole batch:
 - A sibling in the current workstream — no `isolated`, no `useWorktree`
 - `effortLevel: "medium"` — pass it explicitly; without it the reviewer runs at the app-wide default, whatever that happens to be
 
-The reviewer is read-only. It does not edit, commit, or run the gate. Its brief must contain:
+The reviewer preserves the shared checkout and does not fix production code or commit. It may create focused tests or reproduction code and run targeted validation in a separate temporary clone or checkout of the reviewed commits. Give it test-capable tools; the orchestrator still owns the full gate. Its brief must contain:
 
 - The commit range to review — the slices' commits, by hash, and `git diff` scoped to them
 - One line per slice: the issue, the confirmed root cause it was given, and the fix it claims to have made
