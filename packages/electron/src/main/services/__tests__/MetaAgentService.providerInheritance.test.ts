@@ -415,6 +415,7 @@ describe('MetaAgentService child-spawn effort level', () => {
 
 describe('MetaAgentService spawn gates', () => {
   beforeEach(() => {
+    (MetaAgentService.getInstance() as any).readMaxParallelChildSessions = () => 4;
     vi.mocked(AISessionsRepository.create).mockReset();
     vi.mocked(AISessionsRepository.get).mockReset();
     // Reset the shared worker-query mock back to the under-cap default so other
@@ -426,7 +427,7 @@ describe('MetaAgentService spawn gates', () => {
     const service = MetaAgentService.getInstance();
     (service as any).aiService = { queuePromptForSession: vi.fn() };
     vi.mocked(AISessionsRepository.get).mockResolvedValue(CLAUDE_PARENT as any);
-    // 4 children currently running/waiting (>= MAX_IN_FLIGHT). total is well
+    // 4 children currently running/waiting (>= the limit). total is well
     // under the lifetime backstop, proving this gate fires on parallelism alone.
     vi.mocked(databaseWorker.query).mockResolvedValue({ rows: [{ in_flight: '4', total: '4' }] } as any);
 
@@ -435,6 +436,22 @@ describe('MetaAgentService spawn gates', () => {
     ).rejects.toThrow(/Too many child sessions running/);
 
     expect(AISessionsRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('honors a raised max-parallel setting instead of the default of 4', async () => {
+    const service = MetaAgentService.getInstance();
+    (service as any).aiService = { queuePromptForSession: vi.fn() };
+    vi.mocked(AISessionsRepository.get).mockResolvedValue(CLAUDE_PARENT as any);
+    vi.mocked(databaseWorker.query).mockResolvedValue({ rows: [{ in_flight: '4', total: '4' }] } as any);
+
+    (service as any).readMaxParallelChildSessions = () => 8;
+    await (service as any).createChildSessionInternal('parent-claude-session', '/workspace/path', {});
+    expect(AISessionsRepository.create).toHaveBeenCalledTimes(1);
+
+    (service as any).readMaxParallelChildSessions = () => 4;
+    await expect(
+      (service as any).createChildSessionInternal('parent-claude-session', '/workspace/path', {})
+    ).rejects.toThrow(/Too many child sessions running/);
   });
 
   it('allows spawning past a low total when nothing is in flight (no lifetime cap on settled children)', async () => {

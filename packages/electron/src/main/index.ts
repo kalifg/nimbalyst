@@ -2822,6 +2822,7 @@ app.whenReady().then(async () => {
             (options) => notificationService.showNotificationWithResult(options),
             (sessionId, title, body, options) =>
                 requestMobilePush(sessionId, title, body, options),
+            () => getSettingsService().get('agent.maxParallelChildSessions'),
         );
     } catch (error) {
         logger.mcp.error('Failed to start meta-agent MCP server:', error);

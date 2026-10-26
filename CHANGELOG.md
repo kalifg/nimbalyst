@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 <!-- New features go here -->
 - GPT-6.1 Terra is available in the OpenAI Codex model picker
+- A setting for how many child sessions one session can run at once (default 4)
 
 ### Changed
 <!-- Changes to existing functionality go here -->

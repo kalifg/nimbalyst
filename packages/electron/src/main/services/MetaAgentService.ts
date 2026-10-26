@@ -17,6 +17,7 @@ import { AgentMessagesRepository } from '@nimbalyst/runtime/storage/repositories
 import { SessionFilesRepository } from '@nimbalyst/runtime/storage/repositories/SessionFilesRepository';
 import { getSessionStateManager } from '@nimbalyst/runtime/ai/server/SessionStateManager';
 import { getDefaultAIModel } from '../utils/store';
+import { SETTINGS_REGISTRY } from '../../shared/settings/keys';
 import { resolveStoredWorkspaceId, sameWorkspaceIdentity } from '../utils/workspaceIdentity';
 import {
   reserveChildSpawnCapacity,
@@ -209,6 +210,8 @@ export class MetaAgentService {
   private ipcHandlersRegistered = false;
   private showNotificationWithResult: ShowNotificationWithResult | null = null;
   private requestMobilePush: RequestMobilePush | null = null;
+  private readMaxParallelChildSessions: () => number = () =>
+    SETTINGS_REGISTRY['agent.maxParallelChildSessions'].defaultValue as number;
 
   private constructor() {}
 
@@ -250,7 +253,8 @@ export class MetaAgentService {
   public async start(
     aiService: AIService,
     showNotificationWithResult: ShowNotificationWithResult,
-    requestMobilePush?: RequestMobilePush
+    requestMobilePush?: RequestMobilePush,
+    readMaxParallelChildSessions?: () => number
   ): Promise<void> {
     if (this.started) {
       return;
@@ -265,6 +269,7 @@ export class MetaAgentService {
       this.aiService = aiService;
       this.showNotificationWithResult = showNotificationWithResult;
       this.requestMobilePush = requestMobilePush ?? null;
+      if (readMaxParallelChildSessions) this.readMaxParallelChildSessions = readMaxParallelChildSessions;
       this.sessionManager = new SessionManager();
       await this.sessionManager.initialize();
       // Extension backend modules drive their owned sessions through the same
@@ -578,7 +583,12 @@ export class MetaAgentService {
     const title = (args.title || this.deriveTitleFromPrompt(args.prompt) || 'Meta Task').trim();
 
     const sessionId = randomUUID();
-    const releaseCapacity = await reserveChildSpawnCapacity(workspaceKey, metaSessionId, sessionId);
+    const releaseCapacity = await reserveChildSpawnCapacity(
+      workspaceKey,
+      metaSessionId,
+      sessionId,
+      this.readMaxParallelChildSessions()
+    );
     try {
       let worktreeId: string | null = null;
       let worktreePath: string | null = null;

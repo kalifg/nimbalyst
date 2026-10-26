@@ -37,6 +37,7 @@ type AttachmentStagingMode = 'temp' | 'workspace' | 'custom';
 export function AgentFeaturesPanel() {
   const posthog = usePostHog();
   const [externalSessionFollowEnabled, setExternalSessionFollowEnabled] = useAtom(settingAtom('app.externalSessionFollowEnabled'));
+  const [maxParallelChildSessions, setMaxParallelChildSessions] = useAtom(settingAtom('agent.maxParallelChildSessions'));
   const [settings] = useAtom(advancedSettingsAtom);
   const [, updateSettings] = useAtom(setAdvancedSettingsAtom);
   const { alphaFeatures } = settings;
@@ -292,6 +293,29 @@ export function AgentFeaturesPanel() {
           description="After a Claude Code turn you started, show a predicted next prompt in the input. Press Tab to fill it in, then Enter to send. Each suggestion is one extra model call that reuses the conversation cache."
           testId="prompt-suggestions-toggle"
         />
+
+        <div className="agent-max-parallel-children flex items-start justify-between gap-4 py-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-[var(--nim-text)] leading-tight">
+              Max parallel child sessions
+            </div>
+            <div className="text-xs text-[var(--nim-text-muted)] leading-snug mt-0.5">
+              How many sessions one parent session can have running at once when it spawns children. Finished sessions free a slot. Each running session uses your provider quota, so raise this deliberately.
+            </div>
+          </div>
+          <input
+            type="number"
+            min={1}
+            max={32}
+            value={maxParallelChildSessions}
+            onChange={(e) => {
+              const next = Math.round(Number(e.target.value));
+              if (Number.isFinite(next)) setMaxParallelChildSessions(Math.min(32, Math.max(1, next)));
+            }}
+            className="w-20 py-1.5 px-3 rounded-md text-sm bg-[var(--nim-bg-secondary)] border border-[var(--nim-border)] text-[var(--nim-text)] outline-none focus:border-[var(--nim-primary)]"
+            data-testid="max-parallel-child-sessions-input"
+          />
+        </div>
 
         <div className="agent-preferred-language flex items-start justify-between gap-4 py-3">
           <div className="flex-1 min-w-0">

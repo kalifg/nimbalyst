@@ -175,23 +175,25 @@ it.each(['pglite', 'sqlite'] as const)('%s excludes drag-acquired history from l
     await raw.query("INSERT INTO ai_sessions (id, workspace_id, provider) VALUES ('old', '/p', 'claude-code'), ('new', '/p', 'claude-code')");
     for (let i = 0; i < 50; i++) await raw.query(`INSERT INTO ai_sessions (id, workspace_id, provider, created_by_session_id, metadata)
       VALUES ($1, '/p', 'claude-code', 'new', $2)`, [`s${i}`, JSON.stringify({ originalSpawnerSessionId: 'old', managerReassignedByUser: true })]);
-    await expect(assertChildSpawnCapacity('/p', 'new', raw)).resolves.toBeUndefined();
+    await expect(assertChildSpawnCapacity('/p', 'new', 4, raw)).resolves.toBeUndefined();
     expect(await getSpawnedSessionRows('old', '/p', raw)).toHaveLength(0);
     expect(await getSpawnedSessionRows('new', '/p', raw)).toHaveLength(50);
-    const pending = await Promise.all([0, 1, 2, 3].map(index => reserveChildSpawnCapacity('/p', 'new', `reserved${index}`, raw)));
+    const pending = await Promise.all([0, 1, 2, 3].map(index => reserveChildSpawnCapacity('/p', 'new', `reserved${index}`, 4, raw)));
     try {
-      await expect(reserveChildSpawnCapacity('/p', 'new', 'fifth', raw)).rejects.toThrow(/running at once/i);
+      await expect(reserveChildSpawnCapacity('/p', 'new', 'fifth', 4, raw)).rejects.toThrow(/running at once/i);
+      (await reserveChildSpawnCapacity('/p', 'new', 'fifth', 5, raw))();
       await raw.query("INSERT INTO ai_sessions (id, provider, workspace_id, created_by_session_id, status) VALUES ('reserved0', 'claude-code', '/p', 'new', 'running')");
-      await expect(reserveChildSpawnCapacity('/p', 'new', 'fifth', raw)).rejects.toThrow(/running at once/i);
+      await expect(reserveChildSpawnCapacity('/p', 'new', 'fifth', 4, raw)).rejects.toThrow(/running at once/i);
     } finally { pending.forEach(release => release()); }
     await raw.query("DELETE FROM ai_sessions WHERE id = 'reserved0'");
     await raw.query("INSERT INTO ai_sessions (id, provider, workspace_id) VALUES ('limit', 'claude-code', '/p')");
     for (let index = 0; index < 49; index++) await raw.query("INSERT INTO ai_sessions (id, provider, workspace_id, created_by_session_id) VALUES ($1, 'claude-code', '/p', 'limit')", [`limit${index}`]);
-    const reservations = await Promise.allSettled([reserveChildSpawnCapacity('/p', 'limit', 'last-slot', raw), reserveChildSpawnCapacity('/p', 'limit', 'over-limit', raw)]);
+    const reservations = await Promise.allSettled([reserveChildSpawnCapacity('/p', 'limit', 'last-slot', 4, raw), reserveChildSpawnCapacity('/p', 'limit', 'over-limit', 4, raw)]);
     expect(reservations.filter(result => result.status === 'fulfilled')).toHaveLength(1);
     for (const result of reservations) if (result.status === 'fulfilled') result.value();
     await raw.query("UPDATE ai_sessions SET status = 'running' WHERE id IN ('s0','s1','s2','s3')");
-    await expect(assertChildSpawnCapacity('/p', 'new', raw)).rejects.toThrow(/running at once/i);
+    await expect(assertChildSpawnCapacity('/p', 'new', 4, raw)).rejects.toThrow(/running at once/i);
+    await expect(assertChildSpawnCapacity('/p', 'new', 5, raw)).resolves.toBeUndefined();
   } finally { await raw.close(); fs.rmSync(temporary, { recursive: true, force: true }); }
 });
 
@@ -241,21 +243,21 @@ it.each(['pglite', 'sqlite'] as const)('%s keeps deferred launches charged throu
     await raw.query("INSERT INTO ai_sessions (id, workspace_id, provider) VALUES ('manager', '/p', 'claude-code')");
     for (let index = 0; index < 4; index++) {
       const id = `queued${index}`;
-      const release = await reserveChildSpawnCapacity('/p', 'manager', id, raw);
+      const release = await reserveChildSpawnCapacity('/p', 'manager', id, 4, raw);
       try {
         await raw.query("INSERT INTO ai_sessions (id, workspace_id, provider, created_by_session_id) VALUES ($1, '/p', 'claude-code', 'manager')", [id]);
         await raw.query("INSERT INTO queued_prompts (id, session_id, prompt, status) VALUES ($1, $1, 'launch', 'pending')", [id]);
         expect(await driver.drive(id, '/p', 'meta-agent')).toEqual({ kind: 'deferred', reason: 'no-window' });
       } finally { release(); }
     }
-    await expect(reserveChildSpawnCapacity('/p', 'manager', 'fifth', raw)).rejects.toThrow(/running at once/i);
+    await expect(reserveChildSpawnCapacity('/p', 'manager', 'fifth', 4, raw)).rejects.toThrow(/running at once/i);
     available = true;
     for (const callback of [...listeners]) callback();
     await vi.waitFor(async () => expect((await raw.query("SELECT id FROM ai_sessions WHERE status='running'")).rows).toHaveLength(4));
-    await expect(assertChildSpawnCapacity('/p', 'manager', raw)).rejects.toThrow(/running at once/i);
+    await expect(assertChildSpawnCapacity('/p', 'manager', 4, raw)).rejects.toThrow(/running at once/i);
     await raw.query("UPDATE ai_sessions SET status='idle' WHERE id='queued0'");
-    await expect(assertChildSpawnCapacity('/p', 'manager', raw)).rejects.toThrow(/running at once/i);
+    await expect(assertChildSpawnCapacity('/p', 'manager', 4, raw)).rejects.toThrow(/running at once/i);
     await raw.query("UPDATE queued_prompts SET status='completed' WHERE session_id='queued0'");
-    await expect(assertChildSpawnCapacity('/p', 'manager', raw)).resolves.toBeUndefined();
+    await expect(assertChildSpawnCapacity('/p', 'manager', 4, raw)).resolves.toBeUndefined();
   } finally { driver.dispose(); await raw.close(); fs.rmSync(temporary, { recursive: true, force: true }); }
 });

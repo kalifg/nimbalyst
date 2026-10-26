@@ -275,6 +275,12 @@ export const SETTINGS_REGISTRY = {
     { store: 'app-settings', path: 'agentSessionsPopover.width' },
     420,
   ),
+  /** Most child sessions one parent may have running at once; a finished child frees a slot. */
+  'agent.maxParallelChildSessions': setting(
+    z.number().int().min(1).max(32),
+    { store: 'app-settings', path: 'agentMaxParallelChildSessions' },
+    4,
+  ),
   'team.presence.status': setting(
     z.enum(['online', 'away']),
     { store: 'app-settings', path: 'teamPresence.status' },
