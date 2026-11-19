@@ -262,8 +262,9 @@ describe('restoreSessionState window activation', () => {
     } as never);
     mocks.windows.set(1, {
       isDestroyed: () => false,
-      getBounds: () => ({ x: 0, y: 0, width: 800, height: 600 }),
+      getNormalBounds: () => ({ x: 0, y: 0, width: 800, height: 600 }),
       isMaximized: () => false,
+      isFullScreen: () => false,
     });
     mocks.saveSessionState.mockImplementation((state) => mocks.getSessionState.mockReturnValue(state));
 
